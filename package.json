@@ -1,0 +1,48 @@
+{
+  "name": "diet-agent",
+  "version": "0.1.0",
+  "description": "猫猫虫的饮食小助手 - 个人饮食管理桌面应用",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.0",
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "antd": "^5.22.0",
+    "dayjs": "^1.11.13",
+    "dexie": "^4.0.9",
+    "dexie-react-hooks": "^1.1.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.caterpillar.diet-agent",
+    "productName": "Diet Agent",
+    "directories": {
+      "buildResources": "resources"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

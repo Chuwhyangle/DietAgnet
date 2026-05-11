@@ -1,0 +1,87 @@
+/* ===== 猫猫虫侧边栏 ===== */
+
+.cat-sider {
+  background: rgba(255, 252, 245, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255, 182, 193, 0.2);
+  box-shadow: 2px 0 20px rgba(74, 55, 40, 0.04);
+}
+
+.logo-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 20px;
+  border-bottom: 1px dashed rgba(255, 182, 193, 0.3);
+}
+
+.logo-emoji {
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 6px;
+  animation: wiggle 3s ease-in-out infinite;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(5deg); }
+  75% { transform: rotate(-5deg); }
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+}
+
+.logo-sub {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+/* 菜单样式 */
+.cat-menu {
+  background: transparent !important;
+  border-right: none !important;
+  padding: 12px 8px;
+}
+
+.cat-menu .ant-menu-item {
+  border-radius: 12px !important;
+  margin: 4px 0 !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.cat-menu .ant-menu-item:hover {
+  background: rgba(255, 182, 193, 0.15) !important;
+}
+
+.cat-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, rgba(255, 182, 193, 0.3), rgba(232, 213, 245, 0.3)) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+.sider-footer {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-light);
+  padding: 0 12px;
+}
+
+/* ===== 主内容区 ===== */
+
+.cat-content {
+  padding: 28px 32px;
+  overflow-y: auto;
+  background: transparent;
+}

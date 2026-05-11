@@ -1,0 +1,168 @@
+export type AgentProvider = 'deepseek' | 'qwen' | 'custom'
+
+export interface AgentProviderPreset {
+  id: AgentProvider
+  name: string
+  description: string
+  defaultBaseUrl: string
+  defaultModel: string
+}
+
+export const AGENT_PROVIDER_PRESETS: Record<AgentProvider, AgentProviderPreset> = {
+  deepseek: {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    description: '默认走 DeepSeek 的 OpenAI 兼容 Chat Completions 接口。',
+    defaultBaseUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-v4-flash',
+  },
+  qwen: {
+    id: 'qwen',
+    name: '通义千问',
+    description: '默认走阿里云百炼的 OpenAI 兼容 Chat Completions 接口。',
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModel: 'qwen-plus',
+  },
+  custom: {
+    id: 'custom',
+    name: '自定义兼容接口',
+    description: '适用于其他兼容 OpenAI Chat Completions 的模型服务。',
+    defaultBaseUrl: '',
+    defaultModel: '',
+  },
+}
+
+export interface AgentConnectionSettings {
+  provider: AgentProvider
+  apiBaseUrl: string
+  model: string
+}
+
+export const DEFAULT_AGENT_SETTINGS: AgentConnectionSettings = {
+  provider: 'deepseek',
+  apiBaseUrl: AGENT_PROVIDER_PRESETS.deepseek.defaultBaseUrl,
+  model: AGENT_PROVIDER_PRESETS.deepseek.defaultModel,
+}
+
+export function normalizeAgentSettings(
+  settings?: Partial<AgentConnectionSettings> | null,
+): AgentConnectionSettings {
+  const provider = settings?.provider ?? DEFAULT_AGENT_SETTINGS.provider
+  const preset = AGENT_PROVIDER_PRESETS[provider]
+  const apiBaseUrl = settings?.apiBaseUrl?.trim() ?? ''
+  const model = settings?.model?.trim() ?? ''
+  const usePresetDefaults = provider !== 'custom'
+
+  return {
+    provider,
+    apiBaseUrl: apiBaseUrl || (usePresetDefaults ? preset.defaultBaseUrl : ''),
+    model: model || (usePresetDefaults ? preset.defaultModel : ''),
+  }
+}
+
+export interface AgentToolDefinition {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+export interface RemoteToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string | Record<string, unknown>
+  }
+}
+
+export type RemoteChatRole = 'system' | 'user' | 'assistant' | 'tool'
+
+export interface RemoteChatMessage {
+  role: RemoteChatRole
+  content: string | null
+  name?: string
+  tool_call_id?: string
+  tool_calls?: RemoteToolCall[]
+}
+
+export interface AgentToolInvocation {
+  id: string
+  name: string
+  arguments: Record<string, unknown>
+}
+
+export interface AgentChatRequest {
+  settings: AgentConnectionSettings
+  messages: RemoteChatMessage[]
+  tools: AgentToolDefinition[]
+  temperature?: number
+  maxTokens?: number
+}
+
+export interface AgentChatResponse {
+  content: string
+  toolCalls: AgentToolInvocation[]
+  assistantMessage: RemoteChatMessage
+  model?: string
+}
+
+export interface ApiKeyStatusResponse {
+  configured: boolean
+}
+
+export interface SaveApiKeyRequest {
+  provider: AgentProvider
+  apiKey: string
+}
+
+export type AgentErrorCode =
+  | 'auth_failed'
+  | 'endpoint_unreachable'
+  | 'model_not_found'
+  | 'tool_calls_unsupported'
+  | 'timeout'
+  | 'invalid_response'
+  | 'bad_request'
+  | 'unknown'
+
+export interface AgentErrorInfo {
+  code: AgentErrorCode
+  message: string
+  status?: number
+  retryable?: boolean
+}
+
+export type AgentDiagnosticStatus = 'success' | 'failed' | 'warning' | 'not_run'
+
+export interface AgentDiagnosticResult {
+  status: AgentDiagnosticStatus
+  title: string
+  message: string
+  finishReason?: string | null
+  preview?: string
+  toolCallsCount?: number
+  error?: AgentErrorInfo
+}
+
+export interface AgentDiagnosticsResponse {
+  provider: AgentProvider
+  providerName: string
+  endpoint: string
+  resolvedEndpoint: string
+  model: string
+  apiKeyConfigured: boolean
+  checkedAt: string
+  plainChat: AgentDiagnosticResult
+  toolCall: AgentDiagnosticResult
+}
+
+export interface AgentBridge {
+  getApiKeyStatus(provider: AgentProvider): Promise<ApiKeyStatusResponse>
+  saveApiKey(request: SaveApiKeyRequest): Promise<ApiKeyStatusResponse>
+  clearApiKey(provider: AgentProvider): Promise<ApiKeyStatusResponse>
+  chatCompletions(request: AgentChatRequest): Promise<AgentChatResponse>
+  runDiagnostics(settings: AgentConnectionSettings): Promise<AgentDiagnosticsResponse>
+}

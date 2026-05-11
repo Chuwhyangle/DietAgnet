@@ -1,0 +1,156 @@
+/* ===== 菜谱页面样式 ===== */
+
+.recipes-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.recipes-header {
+  margin-bottom: 24px;
+}
+
+.recipes-filter {
+  margin-bottom: 24px;
+}
+
+.search-input {
+  max-width: 400px;
+  margin-bottom: 12px;
+}
+
+.category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cat-tag {
+  cursor: pointer;
+  border-radius: 20px !important;
+  padding: 2px 14px !important;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 182, 193, 0.3) !important;
+}
+
+.cat-tag:hover {
+  transform: scale(1.05);
+}
+
+.cat-tag.active {
+  background: var(--pink-light) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--pink) !important;
+  font-weight: 500;
+}
+
+/* 菜谱卡片 */
+.recipe-card {
+  text-align: center;
+  border-radius: var(--radius-md) !important;
+  background: rgba(255, 252, 245, 0.95) !important;
+  transition: all 0.3s ease !important;
+  padding: 8px 0;
+}
+
+.recipe-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 30px rgba(255, 182, 193, 0.2) !important;
+}
+
+.recipe-card-emoji {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+
+.recipe-card-title {
+  margin-bottom: 8px !important;
+  color: var(--text-primary) !important;
+}
+
+.recipe-tag {
+  border-radius: 12px !important;
+}
+
+.recipe-card-info {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+/* 菜谱详情弹窗 */
+.recipe-modal .ant-modal-content {
+  border-radius: var(--radius-lg) !important;
+  padding: 28px !important;
+}
+
+.recipe-detail-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.recipe-detail-emoji {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.recipe-detail-meta {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.recipe-section {
+  margin-bottom: 20px;
+}
+
+.ingredient-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ingredient-tag {
+  border-radius: 16px !important;
+  background: var(--cream) !important;
+  border: 1px solid rgba(255, 182, 193, 0.2) !important;
+}
+
+.step-item {
+  padding: 8px 0 !important;
+  border-bottom: 1px dashed rgba(255, 182, 193, 0.2) !important;
+}
+
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--pink-light);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.nutrition-section {
+  background: var(--cream);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.nutrition-item {
+  text-align: center;
+}
+
+.nutrition-item .ant-typography {
+  display: block;
+}

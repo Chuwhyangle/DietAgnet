@@ -1,0 +1,293 @@
+/* ===== 首次使用引导 ===== */
+
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.welcome-backdrop {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+    rgba(255, 248, 231, 0.92) 0%,
+    rgba(255, 228, 232, 0.88) 40%,
+    rgba(232, 213, 245, 0.90) 100%);
+  backdrop-filter: blur(24px);
+}
+
+.welcome-container {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: rgba(255, 252, 245, 0.96);
+  border-radius: 32px;
+  padding: 48px 40px 36px;
+  box-shadow:
+    0 32px 80px rgba(74, 55, 40, 0.12),
+    0 2px 0 rgba(255, 255, 255, 0.9) inset;
+  border: 1px solid rgba(255, 182, 193, 0.22);
+  text-align: center;
+  animation: welcome-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes welcome-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(32px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 进度点 */
+.welcome-progress {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 36px;
+}
+
+.welcome-progress-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 182, 193, 0.3);
+  transition: all 0.35s ease;
+}
+
+.welcome-progress-dot.is-active {
+  width: 28px;
+  background: linear-gradient(135deg, #FFB6C1, #FF8FA3);
+}
+
+.welcome-progress-dot.is-done {
+  background: #7DD3A8;
+}
+
+/* 通用步骤 */
+.welcome-step {
+  animation: welcome-fade-in 0.4s ease;
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.welcome-step-title {
+  color: var(--text-primary) !important;
+  margin-bottom: 8px !important;
+}
+
+.welcome-step-description {
+  color: var(--text-secondary) !important;
+  margin-bottom: 28px !important;
+  line-height: 1.7;
+}
+
+/* Step 1: 吉祥物动画 */
+.welcome-mascot {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 24px;
+}
+
+.welcome-mascot-emoji {
+  font-size: 80px;
+  display: block;
+  animation: welcome-mascot-bounce 2.4s ease-in-out infinite;
+}
+
+@keyframes welcome-mascot-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-12px) rotate(-4deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-8px) rotate(3deg); }
+}
+
+.welcome-mascot-sparkle {
+  position: absolute;
+  font-size: 20px;
+  animation: welcome-sparkle 2s ease-in-out infinite;
+}
+
+.welcome-sparkle-1 {
+  top: -8px;
+  right: -20px;
+  animation-delay: 0s;
+}
+
+.welcome-sparkle-2 {
+  top: 10px;
+  left: -24px;
+  animation-delay: 0.6s;
+}
+
+.welcome-sparkle-3 {
+  bottom: 4px;
+  right: -28px;
+  animation-delay: 1.2s;
+}
+
+@keyframes welcome-sparkle {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* Step 2: 昵称输入 */
+.welcome-step-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #ffd2db, #ffe9d5);
+  margin-bottom: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.welcome-step-icon {
+  font-size: 32px;
+  color: #FF8FA3;
+}
+
+.welcome-nickname-input {
+  max-width: 320px;
+  margin: 0 auto 24px !important;
+  height: 52px !important;
+  border-radius: 18px !important;
+  font-size: 16px !important;
+  text-align: center;
+  border: 2px solid rgba(255, 182, 193, 0.35) !important;
+  background: rgba(255, 252, 245, 0.8) !important;
+}
+
+.welcome-nickname-input:focus {
+  border-color: #FFB6C1 !important;
+  box-shadow: 0 0 0 3px rgba(255, 182, 193, 0.18) !important;
+}
+
+.welcome-step-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.welcome-skip-link {
+  color: var(--text-light) !important;
+  font-size: 13px !important;
+}
+
+/* Step 3: 功能卡片 */
+.welcome-features-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 32px;
+  text-align: left;
+}
+
+.welcome-feature-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 252, 245, 0.8);
+  border: 1px solid rgba(255, 182, 193, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.welcome-feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(74, 55, 40, 0.06);
+}
+
+.welcome-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.welcome-feature-desc {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 主按钮 */
+.welcome-main-btn {
+  min-width: 160px;
+  height: 48px !important;
+  border-radius: 16px !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  background: linear-gradient(135deg, #FF8FA3, #FFB886) !important;
+  border: none !important;
+  box-shadow: 0 12px 32px rgba(255, 143, 163, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.welcome-main-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 16px 40px rgba(255, 143, 163, 0.38) !important;
+}
+
+/* 跳过按钮 */
+.welcome-skip-all {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  border: none;
+  background: none;
+  color: var(--text-light);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.welcome-skip-all:hover {
+  background: rgba(255, 182, 193, 0.12);
+  color: var(--text-secondary);
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+  .welcome-container {
+    padding: 36px 24px 28px;
+    border-radius: 24px;
+  }
+
+  .welcome-mascot-emoji {
+    font-size: 60px;
+  }
+
+  .welcome-nickname-input {
+    max-width: 100%;
+  }
+}

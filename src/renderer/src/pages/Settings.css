@@ -1,0 +1,159 @@
+/* ===== 设置页面样式 ===== */
+
+.settings-page {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.settings-card {
+  background: rgba(255, 252, 245, 0.9) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.settings-section {
+  margin-bottom: 28px;
+}
+
+.settings-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.agent-settings-section {
+  padding: 20px;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgba(255, 228, 232, 0.55), rgba(232, 213, 245, 0.38)),
+    rgba(255, 252, 245, 0.72);
+  border: 1px solid rgba(255, 182, 193, 0.18);
+}
+
+.agent-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.agent-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-help-text {
+  margin-top: 8px;
+}
+
+.agent-key-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.diagnostics-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(255, 182, 193, 0.32);
+}
+
+.diagnostics-btn {
+  border-radius: var(--radius-sm) !important;
+}
+
+.diagnostics-card {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.68) !important;
+  border: 1px solid rgba(255, 182, 193, 0.18) !important;
+}
+
+.diagnostics-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.diagnostics-descriptions .ant-descriptions-item-label {
+  width: 112px;
+}
+
+.diagnostics-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.diagnostic-alert-description {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diagnostic-meta-line {
+  display: block;
+}
+
+.diagnostic-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 252, 245, 0.9);
+  border: 1px solid rgba(255, 182, 193, 0.18);
+}
+
+.diagnostic-preview pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.save-btn {
+  background: linear-gradient(135deg, var(--pink), var(--pink-dark)) !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.about-card {
+  background: rgba(255, 252, 245, 0.9) !important;
+  border: 1px dashed rgba(255, 182, 193, 0.3) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.about-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.about-emoji {
+  font-size: 40px;
+}
+
+@media (max-width: 720px) {
+  .agent-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-section-head,
+  .agent-key-actions,
+  .diagnostics-toolbar,
+  .diagnostics-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "references": [
+    { "path": "./src/main/tsconfig.json" },
+    { "path": "./src/preload/tsconfig.json" },
+    { "path": "./src/renderer/tsconfig.json" }
+  ]
+}
