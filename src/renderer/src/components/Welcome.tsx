@@ -29,7 +29,7 @@ const featureCards = [
     icon: <BookOutlined />,
     color: '#B8E8D0',
     title: '浏览菜谱',
-    description: '50 道家常菜谱随时查看，包含食材、步骤和营养信息',
+    description: '120 道中西式菜谱随时查看，包含食材、步骤和营养信息',
   },
   {
     icon: <RobotOutlined />,

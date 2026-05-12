@@ -49,22 +49,65 @@
 }
 
 .cat-menu .ant-menu-item {
+  position: relative;
+  overflow: hidden;
   border-radius: 12px !important;
   margin: 4px 0 !important;
   height: 44px !important;
   line-height: 44px !important;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition:
+    transform var(--motion-fast) var(--easing-smooth),
+    background-color var(--motion-fast) var(--easing-smooth),
+    box-shadow var(--motion-fast) var(--easing-smooth);
+}
+
+.cat-menu .ant-menu-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 8%, rgba(255, 255, 255, 0.9) 48%, transparent 88%);
+  transform: translateX(-130%);
+  transition: transform 0.5s ease;
+}
+
+.cat-menu .ant-menu-item .anticon,
+.cat-menu .ant-menu-item .ant-menu-title-content {
+  position: relative;
+  z-index: 1;
+  transition: transform var(--motion-fast) var(--easing-smooth);
 }
 
 .cat-menu .ant-menu-item:hover {
   background: rgba(255, 182, 193, 0.15) !important;
+  transform: translateX(4px);
+  box-shadow: 0 10px 18px rgba(255, 182, 193, 0.14);
+}
+
+.cat-menu .ant-menu-item:hover::before {
+  transform: translateX(130%);
+}
+
+.cat-menu .ant-menu-item:hover .anticon,
+.cat-menu .ant-menu-item:hover .ant-menu-title-content {
+  transform: translateX(2px);
 }
 
 .cat-menu .ant-menu-item-selected {
   background: linear-gradient(135deg, rgba(255, 182, 193, 0.3), rgba(232, 213, 245, 0.3)) !important;
   color: var(--text-primary) !important;
   font-weight: 600;
+}
+
+.cat-menu .ant-menu-item-selected::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 9px;
+  bottom: 9px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--pink-dark), var(--lavender-dark));
 }
 
 .sider-footer {
@@ -81,7 +124,14 @@
 /* ===== 主内容区 ===== */
 
 .cat-content {
+  position: relative;
   padding: 28px 32px;
   overflow-y: auto;
   background: transparent;
+}
+
+@media (max-width: 960px) {
+  .cat-content {
+    padding: 22px 20px;
+  }
 }

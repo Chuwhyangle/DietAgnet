@@ -24,12 +24,20 @@
   --radius-md: 16px;
   --radius-lg: 24px;
   --radius-xl: 32px;
+  --motion-fast: 180ms;
+  --motion-base: 280ms;
+  --motion-slow: 420ms;
+  --easing-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -45,9 +53,49 @@ body {
   min-height: 100vh;
 }
 
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 /* Ant Design 主题覆盖 */
+.ant-btn,
+.ant-tag,
+.ant-card,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-picker {
+  transition:
+    transform var(--motion-fast) var(--easing-smooth),
+    box-shadow var(--motion-fast) var(--easing-smooth),
+    border-color var(--motion-fast) var(--easing-smooth),
+    background-color var(--motion-fast) var(--easing-smooth) !important;
+}
+
+.ant-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.ant-btn:hover {
+  transform: translateY(-1px);
+}
+
+.ant-btn:active {
+  transform: translateY(0);
+}
+
 .ant-btn-primary {
   border-radius: var(--radius-sm) !important;
+  border: none !important;
+  background: linear-gradient(135deg, var(--pink-dark), var(--pink)) !important;
+  box-shadow: 0 10px 24px rgba(255, 143, 163, 0.22);
+}
+
+.ant-btn-primary:hover {
+  box-shadow: 0 14px 28px rgba(255, 143, 163, 0.28);
 }
 
 .ant-card {
@@ -56,8 +104,25 @@ body {
   box-shadow: var(--shadow-card) !important;
 }
 
-.ant-input, .ant-select-selector {
+.ant-card:hover {
+  box-shadow: 0 14px 30px rgba(74, 55, 40, 0.1) !important;
+}
+
+.ant-input,
+.ant-select-selector,
+.ant-picker {
   border-radius: var(--radius-sm) !important;
+}
+
+.ant-input-affix-wrapper:focus-within,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+  border-color: var(--pink) !important;
+  box-shadow: 0 0 0 4px rgba(255, 182, 193, 0.18) !important;
+}
+
+.ant-modal .ant-modal-content {
+  animation: modal-pop var(--motion-base) var(--easing-smooth);
 }
 
 /* 滚动条美化 */
@@ -79,13 +144,77 @@ body {
 }
 
 /* 页面切换动画 */
-.page-enter {
-  opacity: 0;
-  transform: translateY(10px);
+.route-stage {
+  min-height: calc(100vh - 56px);
+  transform-origin: top center;
+  will-change: transform, opacity, filter;
+  animation-duration: 360ms;
+  animation-fill-mode: both;
 }
 
-.page-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: all 0.3s ease;
+.route-stage.page-enter {
+  animation-name: route-stage-in;
+}
+
+.route-stage.page-exit {
+  animation-name: route-stage-out;
+  pointer-events: none;
+}
+
+@keyframes modal-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes route-stage-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.986);
+    filter: blur(10px);
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes route-stage-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.986);
+    filter: blur(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .route-stage {
+    animation: none !important;
+  }
 }

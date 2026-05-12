@@ -437,7 +437,7 @@ function SettingsPage(): JSX.Element {
             <Text type="secondary">
               当前版本聚焦桌面端饮食管理与 AI 对话能力
               <br />
-              菜谱来源: HowToCook 开源项目
+              菜谱库来源: HowToCook 灵感整理 + 本地扩展中西式菜谱
             </Text>
           </div>
         </div>

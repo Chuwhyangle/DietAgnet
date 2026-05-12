@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState, type AnimationEvent } from 'react'
 import { ConfigProvider, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
 import AppLayout from './components/Layout'
 import Welcome from './components/Welcome'
 import HomePage from './pages/Home'
@@ -30,6 +30,39 @@ const caterpillarTheme = {
   algorithm: theme.defaultAlgorithm,
 }
 
+function AnimatedRoutes(): JSX.Element {
+  const location = useLocation()
+  const [displayLocation, setDisplayLocation] = useState(location)
+  const [transitionStage, setTransitionStage] = useState<'page-enter' | 'page-exit'>('page-enter')
+
+  useEffect(() => {
+    if (location.pathname !== displayLocation.pathname) {
+      setTransitionStage('page-exit')
+    }
+  }, [displayLocation.pathname, location])
+
+  const handleAnimationEnd = (event: AnimationEvent<HTMLDivElement>): void => {
+    if (event.target !== event.currentTarget || transitionStage !== 'page-exit') {
+      return
+    }
+
+    setDisplayLocation(location)
+    setTransitionStage('page-enter')
+  }
+
+  return (
+    <div className={`route-stage ${transitionStage}`} onAnimationEnd={handleAnimationEnd}>
+      <Routes location={displayLocation}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/recipes" element={<RecipesPage />} />
+        <Route path="/diet-log" element={<DietLogPage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Routes>
+    </div>
+  )
+}
+
 function App(): JSX.Element {
   const [showWelcome, setShowWelcome] = useState(() => !getSettings().onboarded)
 
@@ -38,13 +71,7 @@ function App(): JSX.Element {
       {showWelcome && <Welcome onFinish={() => setShowWelcome(false)} />}
       <HashRouter>
         <AppLayout>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/recipes" element={<RecipesPage />} />
-            <Route path="/diet-log" element={<DietLogPage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          <AnimatedRoutes />
         </AppLayout>
       </HashRouter>
     </ConfigProvider>

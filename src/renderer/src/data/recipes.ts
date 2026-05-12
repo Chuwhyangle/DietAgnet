@@ -1,4 +1,6 @@
-// 菜谱数据 - 精选50道家常菜（来源: HowToCook 开源项目 + 营养估算）
+import { additionalChineseRecipes, westernRecipes } from './recipeExtensions'
+
+// 菜谱数据 - 50 道基础家常菜 + 40 道扩展中式 + 30 道西式（含营养估算）
 
 export interface Ingredient {
   name: string
@@ -1179,4 +1181,6 @@ export const recipes: Recipe[] = [
     ],
     nutrition: { protein: 2, carbs: 6, fat: 3 },
   },
+  ...additionalChineseRecipes,
+  ...westernRecipes,
 ]
