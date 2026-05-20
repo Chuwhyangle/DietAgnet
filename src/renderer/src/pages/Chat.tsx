@@ -1,5 +1,4 @@
 import { Card, Typography } from 'antd'
-import AgentChatWorkspace from '../components/AgentChatWorkspace'
 import './Chat.css'
 
 const { Paragraph, Text, Title } = Typography
@@ -17,8 +16,6 @@ function ChatPage(): JSX.Element {
           右下角只保留一个可拖动的快捷入口，不再遮挡主流程操作。
         </Paragraph>
       </Card>
-
-      <AgentChatWorkspace />
     </div>
   )
 }

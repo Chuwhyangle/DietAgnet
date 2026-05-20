@@ -1,0 +1,68 @@
+.express-onboarding-page {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100%;
+  padding: 40px 20px;
+}
+
+.express-onboarding-card {
+  max-width: 520px;
+  width: 100%;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.express-onboarding-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.express-onboarding-icon {
+  font-size: 40px;
+  color: #ffb6c1;
+  margin-bottom: 12px;
+}
+
+.express-onboarding-title {
+  margin-bottom: 8px !important;
+}
+
+.express-onboarding-subtitle {
+  margin-bottom: 0 !important;
+}
+
+.express-onboarding-form .ant-form-item {
+  margin-bottom: 20px;
+}
+
+.express-onboarding-form .ant-radio-group {
+  display: flex;
+  gap: 0;
+}
+
+.express-onboarding-form .ant-radio-button-wrapper {
+  flex: 1;
+  text-align: center;
+}
+
+.express-onboarding-submit {
+  margin-top: 32px;
+  margin-bottom: 0 !important;
+}
+
+.express-onboarding-footer {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.express-onboarding-link {
+  padding: 0 4px;
+}
+
+.prefill-hint {
+  margin-left: 8px;
+  font-size: 12px;
+}

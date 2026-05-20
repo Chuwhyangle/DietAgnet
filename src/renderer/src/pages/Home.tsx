@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Col, Row, Statistic, Tag, Typography } from 'antd'
+import { Button, Card, Col, Row, Statistic, Tag, Typography, message } from 'antd'
+import dayjs from 'dayjs'
 import {
   BookOutlined,
   CheckCircleOutlined,
@@ -11,13 +12,17 @@ import {
 } from '@ant-design/icons'
 import PlanBuilder from '../components/PlanBuilder'
 import PlanVersionAudit from '../components/PlanVersionAudit'
+import OneTapLogger from '../components/OneTapLogger'
 import { recipes } from '../data/recipes'
 import { getTodayLog, summarizeDietLog, type DietLog } from '../stores/dietLog'
 import {
   getCurrentPlanningProfile,
+  getLatestDailyPlanAdjustment,
   getLatestActivePlanningSession,
   getLatestPersonalDietPlan,
   getRecentPersonalDietPlans,
+  updateDailyPlanAdjustmentResponse,
+  type DailyPlanAdjustment,
   type PersonalDietPlan,
   type PlanningProfile,
   type PlanningSession,
@@ -50,6 +55,53 @@ function formatTimestamp(value?: string): string {
   }
 
   return new Date(value).toLocaleString('zh-CN')
+}
+
+function getTodayDateString(): string {
+  return dayjs().format('YYYY-MM-DD')
+}
+
+function getCurrentMealType(): 'breakfast' | 'lunch' | 'dinner' {
+  const hour = dayjs().hour()
+  if (hour < 10) return 'breakfast'
+  if (hour < 15) return 'lunch'
+  return 'dinner'
+}
+
+function getAdjustmentTagColor(adjustment: DailyPlanAdjustment): string {
+  if (adjustment.userResponse === 'accepted') {
+    return 'success'
+  }
+
+  if (adjustment.userResponse === 'dismissed') {
+    return 'default'
+  }
+
+  if (adjustment.suggestionType === 'supplement') {
+    return 'orange'
+  }
+
+  if (adjustment.suggestionType === 'reduce') {
+    return 'blue'
+  }
+
+  return 'processing'
+}
+
+function getAdjustmentStatusText(adjustment: DailyPlanAdjustment): string {
+  if (adjustment.userResponse === 'accepted') {
+    return '已采纳'
+  }
+
+  if (adjustment.userResponse === 'dismissed') {
+    return '已忽略'
+  }
+
+  if (adjustment.userResponse === 'snoozed') {
+    return '稍后提醒'
+  }
+
+  return adjustment.suggestionType === 'supplement' ? '建议补充' : '建议收敛'
 }
 
 function getPlanningActionLabel(params: {
@@ -85,6 +137,7 @@ function HomePage(): JSX.Element {
   const [activePlanningSession, setActivePlanningSession] = useState<PlanningSession | null>(null)
   const [latestPlan, setLatestPlan] = useState<PersonalDietPlan | null>(null)
   const [recentPlans, setRecentPlans] = useState<PersonalDietPlan[]>([])
+  const [latestAdjustment, setLatestAdjustment] = useState<DailyPlanAdjustment | null>(null)
   const [planBuilderOpen, setPlanBuilderOpen] = useState(false)
 
   useEffect(() => {
@@ -92,11 +145,12 @@ function HomePage(): JSX.Element {
 
     const syncPageData = async (): Promise<void> => {
       const settings = getSettings()
-      const [profile, activeSession, plan, plans] = await Promise.all([
+      const [profile, activeSession, plan, plans, adjustment] = await Promise.all([
         getCurrentPlanningProfile(),
         getLatestActivePlanningSession(),
         getLatestPersonalDietPlan(),
         getRecentPersonalDietPlans(6),
+        getLatestDailyPlanAdjustment(getTodayDateString()),
       ])
 
       if (!mounted) {
@@ -109,6 +163,7 @@ function HomePage(): JSX.Element {
       setActivePlanningSession(activeSession)
       setLatestPlan(plan)
       setRecentPlans(plans)
+      setLatestAdjustment(adjustment)
     }
 
     const handleSync = (): void => {
@@ -145,6 +200,21 @@ function HomePage(): JSX.Element {
     totalCount: planningProgress.totalCount,
   })
 
+  const handleAdjustmentResponse = async (
+    adjustment: DailyPlanAdjustment,
+    response: 'accepted' | 'dismissed',
+  ): Promise<void> => {
+    if (!adjustment.id) {
+      return
+    }
+
+    const updatedAdjustment = await updateDailyPlanAdjustmentResponse(adjustment.id, response)
+    if (updatedAdjustment) {
+      setLatestAdjustment(updatedAdjustment)
+      message.success(response === 'accepted' ? '已记录采纳这条建议。' : '已忽略这条建议。')
+    }
+  }
+
   return (
     <div className="home-page">
       <div className="welcome-card">
@@ -154,6 +224,8 @@ function HomePage(): JSX.Element {
         </Title>
         <Text type="secondary">猫猫虫陪你一起管理饮食，健康每一天~</Text>
       </div>
+
+      <OneTapLogger date={getTodayDateString()} mealType={getCurrentMealType()} />
 
       <Card className="planning-hero-card" style={{ marginTop: 24 }}>
         <div className="planning-hero-content">
@@ -204,6 +276,50 @@ function HomePage(): JSX.Element {
           </div>
         </div>
       </Card>
+
+      {latestAdjustment && (
+        <Card className="dynamic-plan-card" style={{ marginTop: 24 }}>
+          <div className="dynamic-plan-content">
+            <div className="dynamic-plan-main">
+              <div className="dynamic-plan-head">
+                <Tag color={getAdjustmentTagColor(latestAdjustment)} bordered={false}>
+                  {getAdjustmentStatusText(latestAdjustment)}
+                </Tag>
+                <Text type="secondary">
+                  {latestAdjustment.mealType
+                    ? `${latestAdjustment.mealType === 'breakfast' ? '早餐' : latestAdjustment.mealType === 'lunch' ? '午餐' : latestAdjustment.mealType === 'dinner' ? '晚餐' : '加餐'}动态建议`
+                    : '今日动态建议'}
+                </Text>
+              </div>
+              <Title level={5} className="dynamic-plan-title">
+                猫猫虫发现今天的计划节奏有变化
+              </Title>
+              <Paragraph className="dynamic-plan-text">
+                {latestAdjustment.suggestionText}
+              </Paragraph>
+              <div className="dynamic-plan-meta">
+                <span>计划 {latestAdjustment.plannedCalories} kcal</span>
+                <span>实际 {latestAdjustment.actualCalories} kcal</span>
+                <span>差值 {latestAdjustment.deltaCalories > 0 ? '+' : ''}{latestAdjustment.deltaCalories} kcal</span>
+              </div>
+            </div>
+
+            {!latestAdjustment.userResponse && (
+              <div className="dynamic-plan-actions">
+                <Button
+                  type="primary"
+                  onClick={() => void handleAdjustmentResponse(latestAdjustment, 'accepted')}
+                >
+                  采纳
+                </Button>
+                <Button onClick={() => void handleAdjustmentResponse(latestAdjustment, 'dismissed')}>
+                  忽略
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Row gutter={[20, 20]} style={{ marginTop: 24 }}>
         <Col xs={24} md={8}>

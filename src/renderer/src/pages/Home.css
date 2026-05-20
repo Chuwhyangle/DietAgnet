@@ -105,6 +105,60 @@
   line-height: 1.5;
 }
 
+.dynamic-plan-card {
+  background:
+    radial-gradient(circle at top left, rgba(184, 232, 208, 0.34), transparent 30%),
+    linear-gradient(135deg, rgba(255, 252, 245, 0.96), rgba(242, 250, 246, 0.94)) !important;
+  border: 1px solid rgba(125, 211, 168, 0.24) !important;
+}
+
+.dynamic-plan-content {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.dynamic-plan-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.dynamic-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dynamic-plan-title {
+  margin-bottom: 8px !important;
+}
+
+.dynamic-plan-text {
+  margin-bottom: 12px !important;
+}
+
+.dynamic-plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dynamic-plan-meta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 252, 245, 0.82);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dynamic-plan-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .stat-card {
   border-radius: var(--radius-md) !important;
   transition: all 0.3s ease !important;
@@ -264,6 +318,19 @@
   .planning-hero-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .dynamic-plan-content,
+  .dynamic-plan-actions {
+    flex-direction: column;
+  }
+
+  .dynamic-plan-actions {
+    width: 100%;
+  }
+
+  .dynamic-plan-actions .ant-btn {
+    width: 100%;
   }
 
   .latest-plan-head {

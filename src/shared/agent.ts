@@ -36,12 +36,23 @@ export interface AgentConnectionSettings {
   provider: AgentProvider
   apiBaseUrl: string
   model: string
+  toolCompatibility: AgentToolCompatibilityMode
 }
+
+export type AgentToolCompatibilityMode =
+  | 'auto'
+  | 'openai_tools'
+  | 'openai_tools_no_choice'
+  | 'legacy_functions'
+  | 'plain_chat'
+
+export type ResolvedToolCompatibilityMode = Exclude<AgentToolCompatibilityMode, 'auto'>
 
 export const DEFAULT_AGENT_SETTINGS: AgentConnectionSettings = {
   provider: 'deepseek',
   apiBaseUrl: AGENT_PROVIDER_PRESETS.deepseek.defaultBaseUrl,
   model: AGENT_PROVIDER_PRESETS.deepseek.defaultModel,
+  toolCompatibility: 'auto',
 }
 
 export function normalizeAgentSettings(
@@ -57,6 +68,7 @@ export function normalizeAgentSettings(
     provider,
     apiBaseUrl: apiBaseUrl || (usePresetDefaults ? preset.defaultBaseUrl : ''),
     model: model || (usePresetDefaults ? preset.defaultModel : ''),
+    toolCompatibility: settings?.toolCompatibility ?? DEFAULT_AGENT_SETTINGS.toolCompatibility,
   }
 }
 
@@ -78,7 +90,7 @@ export interface RemoteToolCall {
   }
 }
 
-export type RemoteChatRole = 'system' | 'user' | 'assistant' | 'tool'
+export type RemoteChatRole = 'system' | 'user' | 'assistant' | 'tool' | 'function'
 
 export interface RemoteChatMessage {
   role: RemoteChatRole
@@ -86,6 +98,11 @@ export interface RemoteChatMessage {
   name?: string
   tool_call_id?: string
   tool_calls?: RemoteToolCall[]
+  reasoning_content?: string | null
+  function_call?: {
+    name?: string
+    arguments?: string | Record<string, unknown>
+  }
 }
 
 export interface AgentToolInvocation {
@@ -107,6 +124,9 @@ export interface AgentChatResponse {
   toolCalls: AgentToolInvocation[]
   assistantMessage: RemoteChatMessage
   model?: string
+  usage?: AgentTokenUsage
+  toolFallback?: boolean
+  toolRequestMode?: ResolvedToolCompatibilityMode
 }
 
 export interface ApiKeyStatusResponse {
@@ -116,6 +136,66 @@ export interface ApiKeyStatusResponse {
 export interface SaveApiKeyRequest {
   provider: AgentProvider
   apiKey: string
+}
+
+export type AgentRequestPurpose = 'chat' | 'diagnostics'
+
+export interface AgentTokenUsage {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+}
+
+export interface AgentUsageRecord {
+  id: string
+  timestamp: string
+  provider: AgentProvider
+  providerName: string
+  model: string
+  purpose: AgentRequestPurpose
+  endpoint: string
+  usage: AgentTokenUsage
+  usageAvailable: boolean
+}
+
+export interface AgentUsageModelSummary {
+  key: string
+  provider: AgentProvider
+  providerName: string
+  model: string
+  calls: number
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
+export interface AgentUsageStatsResponse {
+  totalCalls: number
+  chatCalls: number
+  diagnosticCalls: number
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  usageAvailableCalls: number
+  firstRecordedAt?: string
+  latestRecordedAt?: string
+  byModel: AgentUsageModelSummary[]
+  recentRecords: AgentUsageRecord[]
+}
+
+export interface DesktopNotificationRequest {
+  title: string
+  body: string
+  silent?: boolean
+  urgency?: 'normal' | 'critical' | 'low'
+  /** Target page to navigate to when the notification is clicked */
+  page?: 'diet-log' | 'chat' | 'home'
+}
+
+export interface DesktopNotificationResponse {
+  supported: boolean
+  shown: boolean
+  reason?: string
 }
 
 export type AgentErrorCode =
@@ -144,6 +224,7 @@ export interface AgentDiagnosticResult {
   finishReason?: string | null
   preview?: string
   toolCallsCount?: number
+  toolRequestMode?: ResolvedToolCompatibilityMode
   error?: AgentErrorInfo
 }
 
@@ -165,4 +246,7 @@ export interface AgentBridge {
   clearApiKey(provider: AgentProvider): Promise<ApiKeyStatusResponse>
   chatCompletions(request: AgentChatRequest): Promise<AgentChatResponse>
   runDiagnostics(settings: AgentConnectionSettings): Promise<AgentDiagnosticsResponse>
+  getUsageStats(): Promise<AgentUsageStatsResponse>
+  clearUsageStats(): Promise<AgentUsageStatsResponse>
+  showNotification(request: DesktopNotificationRequest): Promise<DesktopNotificationResponse>
 }

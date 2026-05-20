@@ -178,10 +178,18 @@ export function getTodayLog(): DietLog | null {
   return getDietLog(dayjs().format('YYYY-MM-DD'))
 }
 
-export function saveDietLog(log: DietLog): void {
+export function saveDietLog(
+  log: DietLog,
+  emitMeta?: { mealType?: MealType; resetPlanSuggestions?: boolean },
+): void {
   const normalizedLog = cloneDietLog(log)
   localStorage.setItem(LOG_PREFIX + normalizedLog.date, JSON.stringify(normalizedLog))
-  emitDietLogUpdated(normalizedLog.date)
+  emitDietLogUpdated(normalizedLog.date, emitMeta ?? {})
+}
+
+function removeDietLog(date: string): void {
+  localStorage.removeItem(LOG_PREFIX + date)
+  emitDietLogUpdated(date, { resetPlanSuggestions: true })
 }
 
 export function getLogsForRange(startDate: string, endDate: string): DietLog[] {
@@ -198,6 +206,20 @@ export function getLogsForRange(startDate: string, endDate: string): DietLog[] {
   }
 
   return logs
+}
+
+export function getAllDietLogs(): DietLog[] {
+  try {
+    return Object.keys(localStorage)
+      .filter((key) => key.startsWith(LOG_PREFIX))
+      .map((key) => key.slice(LOG_PREFIX.length))
+      .map((date) => getDietLog(date))
+      .filter((log): log is DietLog => Boolean(log))
+      .sort((left, right) => left.date.localeCompare(right.date))
+  } catch (error) {
+    console.error('Failed to load all diet logs:', error)
+    return []
+  }
 }
 
 export function getWeekBounds(date: string): { startDate: string; endDate: string } {
@@ -275,6 +297,30 @@ export function createMealItemFromRecipe(recipe: Recipe, servings = 1): MealItem
   }
 }
 
+export function createMealItemFromNutrition(params: {
+  recipeId: string
+  name: string
+  emoji?: string
+  servings?: number
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}): MealItem {
+  const servings = params.servings ?? 1
+
+  return {
+    recipeId: params.recipeId,
+    name: params.name,
+    emoji: params.emoji,
+    servings,
+    calories: Math.round(params.calories * servings),
+    protein: Math.round(params.protein * servings * 10) / 10,
+    carbs: Math.round(params.carbs * servings * 10) / 10,
+    fat: Math.round(params.fat * servings * 10) / 10,
+  }
+}
+
 export function addRecipeToDietLog(params: {
   date: string
   mealType: MealType
@@ -296,7 +342,30 @@ export function addRecipeToDietLog(params: {
     })
   }
 
-  saveDietLog(nextLog)
+  saveDietLog(nextLog, { mealType })
+  return nextLog
+}
+
+export function addMealItemToDietLog(params: {
+  date: string
+  mealType: MealType
+  item: MealItem
+}): DietLog {
+  const { date, mealType, item } = params
+  const currentLog = getDietLog(date) ?? createEmptyDietLog(date)
+  const nextLog = cloneDietLog(currentLog)
+  const existingMeal = nextLog.meals.find((meal) => meal.type === mealType)
+
+  if (existingMeal) {
+    existingMeal.items.push({ ...item })
+  } else {
+    nextLog.meals.push({
+      type: mealType,
+      items: [{ ...item }],
+    })
+  }
+
+  saveDietLog(nextLog, { mealType })
   return nextLog
 }
 
@@ -320,7 +389,12 @@ export function removeMealItemFromDietLog(params: {
   meal.items.splice(itemIndex, 1)
   nextLog.meals = nextLog.meals.filter((entry) => entry.items.length > 0)
 
-  saveDietLog(nextLog)
+  if (nextLog.meals.length === 0) {
+    removeDietLog(date)
+    return null
+  }
+
+  saveDietLog(nextLog, { mealType, resetPlanSuggestions: true })
   return nextLog
 }
 

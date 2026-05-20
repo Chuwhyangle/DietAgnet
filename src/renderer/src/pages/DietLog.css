@@ -44,8 +44,162 @@
   gap: 16px;
 }
 
+.daily-summary-helper {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 今日计划 vs 实际（PRD 3.3 差值分析） */
+.plan-gap-card {
+  margin-bottom: 20px;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid rgba(125, 211, 168, 0.28) !important;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(184, 232, 208, 0.35), transparent 42%),
+    linear-gradient(135deg, rgba(255, 252, 245, 0.98), rgba(240, 250, 246, 0.95)) !important;
+}
+
+.plan-gap-card-muted {
+  border-color: rgba(255, 182, 193, 0.22) !important;
+  background: rgba(255, 252, 245, 0.88) !important;
+}
+
+.plan-gap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.plan-gap-progress {
+  margin-bottom: 18px;
+}
+
+.plan-gap-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plan-gap-net-line {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.plan-gap-meals-title {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.plan-gap-meal-grid {
+  display: grid;
+  grid-template-columns: 1fr 88px 88px 88px;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.plan-gap-meal-head {
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255, 182, 193, 0.35);
+  margin-bottom: 6px;
+}
+
+.plan-gap-meal-row {
+  padding: 6px 0;
+  border-radius: 10px;
+}
+
+.plan-gap-meal-row.is-under {
+  background: rgba(125, 211, 168, 0.12);
+}
+
+.plan-gap-meal-row.is-over {
+  background: rgba(255, 120, 117, 0.1);
+}
+
+.plan-gap-meal-row.is-even {
+  background: rgba(255, 252, 245, 0.6);
+}
+
+.plan-gap-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-gap-footnote {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
 .summary-emoji {
   font-size: 32px;
+}
+
+.dynamic-plan-log-card {
+  margin-bottom: 20px;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid rgba(125, 211, 168, 0.24) !important;
+  background:
+    radial-gradient(circle at top left, rgba(184, 232, 208, 0.34), transparent 30%),
+    linear-gradient(135deg, rgba(255, 252, 245, 0.96), rgba(242, 250, 246, 0.94)) !important;
+}
+
+.dynamic-plan-log-content {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.dynamic-plan-log-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dynamic-plan-log-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dynamic-plan-log-text {
+  color: var(--text-secondary);
+}
+
+.dynamic-plan-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dynamic-plan-log-meta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 252, 245, 0.82);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dynamic-plan-log-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 每周统计 */
@@ -147,8 +301,40 @@
 .weekly-day-row {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) 140px 74px;
-  align-items: center;
+  align-items: start;
   gap: 12px;
+}
+
+.weekly-day-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.weekly-day-macro-strip {
+  display: flex;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 214, 222, 0.35);
+}
+
+.macro-seg {
+  min-width: 2px;
+  height: 100%;
+}
+
+.macro-seg-protein {
+  background: linear-gradient(90deg, #ff9eb5, #ffb6c1);
+}
+
+.macro-seg-carbs {
+  background: linear-gradient(90deg, #7ec8e3, #87ceeb);
+}
+
+.macro-seg-fat {
+  background: linear-gradient(90deg, #d4b896, #e8c9a0);
 }
 
 .weekly-day-label {
@@ -334,11 +520,22 @@
   }
 
   .summary-content,
+  .daily-summary-helper,
   .meal-item-info,
   .weekly-report-header,
-  .weekly-chart-head {
+  .weekly-chart-head,
+  .dynamic-plan-log-content,
+  .dynamic-plan-log-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .dynamic-plan-log-actions {
+    width: 100%;
+  }
+
+  .dynamic-plan-log-actions .ant-btn {
+    width: 100%;
   }
 
   .weekly-overview-grid,

@@ -2,14 +2,26 @@
 
 一个基于 Electron + React + TypeScript 的桌面端饮食管理应用，围绕“猫猫虫”这个 AI 饮食小助手设计。项目把菜谱浏览、饮食记录、营养统计、AI 对话和引导式饮食计划整合在一个本地优先的桌面应用里，适合个人日常使用。
 
+当前项目已经完成桌面端 MVP 和 AI 引导式计划主线。下一阶段的产品方向，是让猫猫虫从“用户问才回答”的助手，升级为“能观察记录、判断偏差、主动建议”的饮食教练。
+
 ## 功能亮点
 
-- 菜谱浏览：内置 50 道菜谱，支持分类筛选、关键词搜索和详情查看。
+- 菜谱浏览：内置 130 道中西式菜谱，支持分类筛选、关键词搜索和详情查看。
 - 饮食记录：按早餐、午餐、晚餐、加餐记录每天摄入，自动汇总热量与宏量营养素。
 - 每周统计：基于所选日期生成 7 日摄入分布、完成度和目标命中情况。
+- 一分钟开始减肥：Express Onboarding 只需填写性别、身高、体重、目标体重和活动水平 5 个字段，60 秒内生成专属饮食计划；完整 13 步问答版保留为可选路径。
+- 一键饮食记录：One-Tap Logger 提供拍照、一行文字、"和昨天一样"快捷键和常见食物芯片四种入口，1–2 次点击完成记录。
+- 拍照识别食物（有限范围）：通过 OpenAI 兼容的视觉模型（如 Qwen-VL、GPT-4o）经由现有 chat-completions 代理估算食物热量与宏量营养。不引入原生 CV 管线、不捆绑离线图像模型、不持久化原始图片字节。
+- 信任旋钮（Trust Dial）：`autopilot` 模式下高置信度估算自动保存，`precision` 模式下每条记录需确认。默认 autopilot，随时可切换。
 - AI 对话：内置“猫猫虫”聊天入口，可通过兼容 OpenAI Chat Completions 的模型服务执行工具调用。
+- 库外食物估算：如果用户吃了菜谱库里没有的食物，Agent 可按描述估算份量、热量和宏量营养，并保存为本地自定义食物供后续复用。
 - AI 引导式计划：逐步采集年龄、身高、体重、目标、作息与偏好，生成专属饮食计划。
 - 异常追问与审计：对异常 BMI、目标差距、餐次等情况继续追问，并保留计划版本对比。
+- 动态计划建议：记录饮食后可检查当天计划偏差，生成补餐/减餐建议，并支持采纳或忽略。
+- 主动 Agent：支持前端运行时餐次未记录提醒、静音时段、冷却策略、连续忽略暂停、提醒响应审计和对话内提醒偏好调整；窗口最小化时通过主进程后台 tick 和 OS 通知继续提醒。
+- 长期记忆：Agent 可记住用户确认过的偏好、过敏、忌口、作息和习惯，并在设置页查看、删除或调置信度。
+- 菜谱数据治理：菜谱类型、中式菜谱、西式菜谱已拆分维护，并提供 `validate:recipes` 质量校验脚本。
+- 菜谱热量校准：Agent 可提交待审核热量估算记录，设置页展示校准审计概览，正式菜谱不会被自动覆盖。
 - 本地优先：设置、饮食记录、聊天记录和计划数据都存本地，不依赖后端服务。
 - 首次引导：新用户首次启动时会进入欢迎流程，帮助快速完成基础设置。
 
@@ -65,9 +77,42 @@ npm run build:linux
 | `npm run build` | 构建主进程、预加载脚本和渲染进程 |
 | `npm run preview` | 预览生产构建 |
 | `npm run start` | 等同于 `npm run preview` |
+| `npm test` | 单次运行全部测试 |
+| `npm run test:watch` | 监听模式运行测试 |
+| `npm run test:coverage` | 运行测试并生成覆盖率报告 |
+| `npm run test:budget` | 检查测试耗时是否在 90 秒预算内 |
+| `npm run validate:recipes` | 校验菜谱数据的重复 ID、必填字段、热量和宏量营养 |
 | `npm run build:win` | 构建并打包 Windows 安装包 |
 | `npm run build:mac` | 构建并打包 macOS 应用 |
 | `npm run build:linux` | 构建并打包 Linux 应用 |
+
+## 测试
+
+### 命令
+
+| 命令 | 说明 |
+| --- | --- |
+| `npm test` | 单次运行全部测试（`vitest --run`） |
+| `npm run test:watch` | 监听模式，文件变更时自动重跑 |
+| `npm run test:coverage` | 单次运行 + 生成覆盖率报告（v8），未达阈值时退出码非零 |
+| `npm run test:budget` | 检查测试总耗时是否在 90 秒预算内 |
+
+### 文件命名与目录约定
+
+- `*.test.ts` — 单元测试（example-based）
+- `*.test.tsx` — React 组件 / 页面冒烟测试
+- `*.property.test.ts` — 基于 fast-check 的属性测试（property-based）
+- 测试文件放在被测模块旁的 `__tests__/` 目录下
+
+### 三层测试架构
+
+| 层级 | 覆盖范围 | 测试方式 |
+| --- | --- | --- |
+| Tier 1 | 纯逻辑模块（解析器、校验器、调度器、计算） | Example + Property 测试 |
+| Tier 2 | Agent 控制器、IPC handler、preload bridge | 带 mock 的集成测试 |
+| Tier 3 | React 组件和页面 | 渲染冒烟 + 单次交互断言 |
+
+详细测试指南见 [TESTING.md](./TESTING.md)。
 
 ## AI 对话配置
 
@@ -98,8 +143,17 @@ npm run build:linux
 - 用户设置：`localStorage`
 - 饮食记录：`localStorage`
 - 聊天记录：`localStorage`
-- AI 引导式计划与版本审计：Dexie 数据库 `diet-agent-planning`
+- 菜谱校准审计记录：`localStorage`
+- AI 引导式计划、主动事件、动态建议与长期记忆：Dexie 数据库 `diet-agent-planning`
 - API Key：Electron 主进程安全存储
+
+后续主动 Agent 和动态计划建议仍遵循本地优先原则：
+
+- 当天计划调整建议写入本地审计记录。
+- 主动提醒事件写入本地审计记录。
+- 长期记忆写入本地 Dexie，用户可在设置页删除或调低置信度。
+- 菜谱热量校准结果先进入待审核记录，不直接覆盖正式菜谱。
+- RAG、embedding 和大体积知识库必须按需加载，避免影响普通启动和首屏。
 
 这意味着项目默认更偏向单机使用，当前不包含账号系统、云同步和后端服务。
 
@@ -109,7 +163,7 @@ npm run build:linux
 - 菜谱：浏览、筛选、搜索和查看菜谱详情
 - 饮食记录：记录餐次、查看日汇总和周报
 - AI 对话：与猫猫虫自然对话，调用应用内工具完成查看、记录和推荐
-- 设置：昵称、每日热量目标、AI 通道配置与连接诊断
+- 设置：昵称、每日热量目标、主动提醒、长期记忆、菜谱校准审计、AI 通道配置与连接诊断
 
 ## 项目结构
 
@@ -118,13 +172,16 @@ Diet Agent/
 ├─ docs/
 │  ├─ PRD.md
 │  ├─ agent-chat-design.md
-│  ├─ development-log.md
-│  └─ planning-flow-design.md
+│  ├─ planning-flow-design.md
+│  ├─ proactive-agent-dynamic-plan-design.md
+│  ├─ recipe-data-governance.md
+│  ├─ v0.5-extension-plan.md
+│  └─ development-log.md
 ├─ resources/
 ├─ src/
 │  ├─ main/          # Electron 主进程
 │  ├─ preload/       # preload / IPC bridge
-│  ├─ renderer/      # React 前端
+│  ├─ renderer/      # React 前端，含 data/recipes.ts 统一菜谱出口
 │  └─ shared/        # 主进程与渲染进程共享类型
 ├─ electron.vite.config.ts
 ├─ package.json
@@ -136,17 +193,22 @@ Diet Agent/
 - [产品需求文档](./docs/PRD.md)
 - [Agent 对话设计](./docs/agent-chat-design.md)
 - [AI 引导式计划设计](./docs/planning-flow-design.md)
+- [主动 Agent 与动态计划建议设计](./docs/proactive-agent-dynamic-plan-design.md)
+- [菜谱热量校准与数据治理设计](./docs/recipe-data-governance.md)
+- [v0.5 扩展设计](./docs/v0.5-extension-plan.md)
 - [开发日志](./docs/development-log.md)
 
 ## 当前范围
 
-当前代码库聚焦桌面端 MVP 和本地优先能力，以下内容暂未包含：
+当前代码库聚焦桌面端 MVP、本地优先能力、主动 Agent、低门槛教练和菜谱数据治理，以下内容暂未包含：
 
 - 用户注册与登录
 - 云端同步
 - 后端服务
 - 移动端或 Web 版
-- 图片识别食物
+- 应用完全退出后的系统级后台服务（如 Windows Service / macOS LaunchAgent）
+- 菜谱热量 LLM 批量校准脚本和自动应用流程
+- RAG / embedding 本地知识库
 
 ## 致谢
 

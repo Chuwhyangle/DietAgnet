@@ -9,6 +9,8 @@ import {
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import AgentChat from './AgentChat'
+import AgentChatWorkspace from './AgentChatWorkspace'
+import ProactiveReminder from '../proactive/ProactiveReminder'
 import './Layout.css'
 
 const { Sider, Content } = Layout
@@ -49,9 +51,10 @@ function AppLayout({ children }: AppLayoutProps): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
   const hideAgentChat = location.pathname === '/settings' || location.pathname === '/chat'
+  const showChatWorkspace = location.pathname === '/chat'
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="app-shell">
       <Sider
         width={200}
         className="cat-sider"
@@ -75,7 +78,11 @@ function AppLayout({ children }: AppLayoutProps): JSX.Element {
       </Sider>
       <Content className="cat-content">
         {children}
+        <div className="agent-chat-workspace-container" style={{ display: showChatWorkspace ? 'block' : 'none' }}>
+          <AgentChatWorkspace />
+        </div>
       </Content>
+      <ProactiveReminder />
       <AgentChat hidden={hideAgentChat} />
     </Layout>
   )

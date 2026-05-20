@@ -1,0 +1,81 @@
+/* PlanDriftCard — plan drift proposal card */
+
+.plan-drift-card {
+  margin-bottom: 16px;
+}
+
+.plan-drift-card .ant-card-body {
+  padding: 16px;
+}
+
+.plan-drift-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.plan-drift-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plan-drift-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-drift-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plan-drift-metric {
+  padding: 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 244, 235, 0.95), rgba(255, 250, 243, 0.98));
+  border: 1px solid rgba(255, 182, 193, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.plan-drift-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.plan-drift-summary {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(250, 250, 250, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.plan-drift-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(125, 107, 93, 0.12);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .plan-drift-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-drift-actions {
+    flex-direction: column;
+  }
+
+  .plan-drift-actions .ant-btn {
+    width: 100%;
+  }
+}

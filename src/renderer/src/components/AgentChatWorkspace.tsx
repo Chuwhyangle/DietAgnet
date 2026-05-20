@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Input, Modal, Tag, Typography } from 'antd'
 import {
   ClearOutlined,
-  RobotOutlined,
+  BulbOutlined,
   SendOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import ReactMarkdown, { defaultUrlTransform, type UrlTransform } from 'react-markdown'
 import { AGENT_PROVIDER_PRESETS } from '../../../shared/agent'
 import { runAgentConversation, type ConversationTurn } from '../agent/controller'
 import { describeToolExecution } from '../agent/tools'
@@ -16,12 +17,36 @@ import {
   saveChatHistory,
   type PersistedChatMessage,
 } from '../stores/chatHistory'
-import { SETTINGS_UPDATED_EVENT } from '../stores/events'
+import { runPostChatMemoryExtraction } from '../memory/postChatExtraction'
 import { getSettings } from '../stores/settings'
+import { SETTINGS_UPDATED_EVENT, CHAT_HISTORY_UPDATED_EVENT, type ChatHistoryUpdatedDetail } from '../stores/events'
 import './AgentChat.css'
 
 const { Text, Title } = Typography
 const { TextArea } = Input
+
+/** 助手气泡 Markdown：在库默认清洗之上，链接/图片仅允许 https? 与页内 #，降低 Electron 环境下的打开风险。 */
+const agentMarkdownUrlTransform: UrlTransform = (url, key) => {
+  const base = defaultUrlTransform(url)
+  if (!base || !base.trim()) {
+    return ''
+  }
+  if (key !== 'href' && key !== 'src') {
+    return base
+  }
+  const t = base.trim()
+  if (t.startsWith('#')) {
+    return t
+  }
+  if (/^https?:\/\//i.test(t)) {
+    try {
+      return new URL(t).href
+    } catch {
+      return ''
+    }
+  }
+  return ''
+}
 
 type ChatMessage = PersistedChatMessage
 
@@ -57,6 +82,39 @@ const quickActions: QuickAction[] = [
     type: 'send',
     content: '我今天吃了多少卡路里？',
   },
+  {
+    key: 'estimate-custom-food',
+    label: '🥣 估算库外食物',
+    type: 'prefill',
+    content: '我刚刚吃了一个菜谱库里没有的食物，请帮我估算份量、热量和宏量营养，并记录到今天的饮食里：',
+  },
+]
+
+const onboardingActions: QuickAction[] = [
+  {
+    key: 'onboard-log',
+    label: '记录今天吃了什么',
+    type: 'prefill',
+    content: '我今天早餐吃了',
+  },
+  {
+    key: 'onboard-gap',
+    label: '检查今日计划偏差',
+    type: 'send',
+    content: '帮我检查今天的饮食计划有没有偏差，并给出下午或晚餐建议。',
+  },
+  {
+    key: 'onboard-memory',
+    label: '让 Agent 记住偏好',
+    type: 'prefill',
+    content: '请记住我不吃',
+  },
+  {
+    key: 'onboard-knowledge',
+    label: '查食物营养',
+    type: 'send',
+    content: '帮我查一下鸡胸肉和米饭的大致营养，并推荐一个低脂搭配。',
+  },
 ]
 
 function createMessage(kind: ChatMessage['kind'], content: string): ChatMessage {
@@ -85,6 +143,7 @@ function toConversationHistory(messages: ChatMessage[]): ConversationTurn[] {
     .map((message) => ({
       role: message.kind,
       content: message.content,
+      remoteTranscript: message.kind === 'assistant' ? message.remoteTranscript : undefined,
     }))
 }
 
@@ -99,6 +158,7 @@ function initMessages(): ChatMessage[] {
 
 function AgentChatWorkspace(): JSX.Element {
   const navigate = useNavigate()
+  const location = useLocation()
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const [inputValue, setInputValue] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>(initMessages)
@@ -152,6 +212,31 @@ function AgentChatWorkspace(): JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    const handleChatHistory = (event: Event): void => {
+      const detail = (event as CustomEvent<ChatHistoryUpdatedDetail>).detail
+      if (detail?.appendedCoach) {
+        setMessages((current) => [...current, detail.appendedCoach as PersistedChatMessage])
+        return
+      }
+    }
+
+    window.addEventListener(CHAT_HISTORY_UPDATED_EVENT, handleChatHistory)
+    return () => {
+      window.removeEventListener(CHAT_HISTORY_UPDATED_EVENT, handleChatHistory)
+    }
+  }, [])
+
+  useEffect(() => {
+    const routeState = location.state as { prefill?: string } | null
+    if (!routeState?.prefill) {
+      return
+    }
+
+    setInputValue(routeState.prefill)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, location.state, navigate])
+
   const appendMessage = useCallback((message: ChatMessage): void => {
     setMessages((currentMessages) => [...currentMessages, message])
   }, [])
@@ -202,7 +287,16 @@ function AgentChatWorkspace(): JSX.Element {
         },
       })
 
-      appendMessage(createMessage('assistant', result.assistantMessage))
+      appendMessage({
+        ...createMessage('assistant', result.assistantMessage),
+        remoteTranscript: result.assistantRemoteTranscript,
+      })
+      void runPostChatMemoryExtraction({
+        userMessage: trimmedInput,
+        assistantMessage: result.assistantMessage,
+      }).catch((error) => {
+        console.error('postChatMemoryExtraction failed', error)
+      })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '发生了一个未知错误。'
       appendMessage(createMessage('assistant', `喵呜，刚刚没处理成功：${errorMessage}`))
@@ -226,6 +320,8 @@ function AgentChatWorkspace(): JSX.Element {
 
     void handleSubmit(action.content)
   }
+
+  const showOnboarding = messages.every((message) => message.kind !== 'user')
 
   return (
     <div className="agent-chat-workspace">
@@ -267,6 +363,34 @@ function AgentChatWorkspace(): JSX.Element {
       </div>
 
       <div className="agent-chat-body">
+        {showOnboarding && (
+          <div className="agent-chat-onboarding">
+            <div className="agent-chat-onboarding-head">
+              <BulbOutlined />
+              <div>
+                <Text strong>第一次聊天可以从这里开始</Text>
+                <Text type="secondary">
+                  Agent 会优先调用本地工具，不只是聊天：它能记录饮食、看今日偏差、记住长期偏好，也能查菜谱和营养知识。
+                </Text>
+              </div>
+            </div>
+
+            <div className="agent-chat-onboarding-grid">
+              {onboardingActions.map((action) => (
+                <button
+                  key={action.key}
+                  type="button"
+                  className="agent-chat-onboarding-card"
+                  onClick={() => handleQuickAction(action)}
+                  disabled={isSending}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {messages.map((message) => {
           if (message.kind === 'tool') {
             return (
@@ -276,14 +400,28 @@ function AgentChatWorkspace(): JSX.Element {
             )
           }
 
+          if (message.kind === 'user') {
+            return (
+              <div key={message.id} className="agent-chat-row is-user">
+                <div className="agent-chat-bubble is-user">
+                  <Text>{message.content}</Text>
+                </div>
+              </div>
+            )
+          }
+
           return (
-            <div
-              key={message.id}
-              className={`agent-chat-row ${message.kind === 'user' ? 'is-user' : 'is-assistant'}`}
-            >
-              {message.kind === 'assistant' && <div className="agent-chat-bubble-avatar">🐛</div>}
-              <div className={`agent-chat-bubble ${message.kind === 'user' ? 'is-user' : 'is-assistant'}`}>
-                <Text>{message.content}</Text>
+            <div key={message.id} className="agent-chat-row is-assistant">
+              <div className="agent-chat-bubble-avatar">🐛</div>
+              <div
+                className={`agent-chat-bubble is-assistant ${message.kind === 'coach' ? 'is-coach' : ''}`}
+              >
+                <ReactMarkdown
+                  className="agent-chat-markdown"
+                  urlTransform={agentMarkdownUrlTransform}
+                >
+                  {message.content}
+                </ReactMarkdown>
               </div>
             </div>
           )

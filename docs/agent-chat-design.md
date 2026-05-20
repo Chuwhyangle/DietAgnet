@@ -1,6 +1,6 @@
 # 猫猫虫对话 Agent - 技术设计文档
 
-> 最后更新: 2026-05-12
+> 最后更新: 2026-05-13
 
 ## 1. 需求概述
 
@@ -171,6 +171,96 @@
 - **参数**：`{ period: "today"|"week" }`
 - **返回**：`{ summary, suggestions: string[] }`
 - **场景**：「我最近营养均衡吗？」
+
+#### `get_current_plan`
+- **描述**：读取当前最新正式饮食计划
+- **参数**：无
+- **返回**：`{ plan, exists }`
+- **场景**：Agent 判断今日建议前先确认正式计划目标
+
+#### `check_today_plan_gap`
+- **描述**：比较今日计划目标和实际摄入，返回总差值与餐次差值
+- **参数**：`{ date?: string }`
+- **返回**：`{ gap, suggestion }`
+- **场景**：「我今天还差多少卡？」「下午要不要补点？」
+
+#### `suggest_plan_adjustment`
+- **描述**：根据当天或某餐偏差生成补餐/减餐建议，并可写入审计记录
+- **参数**：`{ date?: string, mealType?: "breakfast"|"lunch"|"dinner"|"snack", persist?: boolean }`
+- **返回**：`{ suggestion, savedAdjustment }`
+- **场景**：午餐计划 1000 kcal 但只记录 500 kcal 后，建议下午补 300-500 kcal
+
+#### `record_adjustment_response`
+- **描述**：记录用户对动态计划建议的采纳或忽略
+- **参数**：`{ adjustmentId: number, response: "accepted"|"dismissed"|"snoozed" }`
+- **返回**：`{ success, adjustment }`
+- **场景**：「这个建议我采纳」「先忽略这条」
+
+#### `get_proactive_event_history`
+- **描述**：查询近期主动提醒历史
+- **参数**：`{ limit?: number }`
+- **返回**：`{ events }`
+- **场景**：「最近提醒过我什么？」
+
+#### `update_reminder_preferences`
+- **描述**：更新主动提醒偏好
+- **参数**：`{ enabled?, mealReminders?, planAdjustmentReminders?, weeklyReportReminders?, quietStartHour?, quietEndHour?, cooldownHours? }`
+- **返回**：`{ success, reminders }`
+- **场景**：「晚上 11 点以后别提醒我」「把提醒冷却改成 6 小时」
+
+#### `validate_recipe_library`
+- **描述**：校验当前 120 道菜谱的数据质量
+- **参数**：无
+- **返回**：`{ totalRecipes, duplicateIds, missingRequiredFields, invalidNutrition, suspiciousCalories, categoryCounts, status }`
+- **场景**：「检查一下菜谱数据有没有问题」
+
+#### `estimate_recipe_nutrition`
+- **描述**：把模型估算出的热量和宏量营养写入待审核校准记录，不直接覆盖正式菜谱
+- **参数**：`{ recipeId, estimatedCalories, estimatedProtein, estimatedCarbs, estimatedFat, reasoning, confidence, riskNotes?, model? }`
+- **返回**：`{ success, record, officialRecipeUnchanged: true }`
+- **场景**：「帮我估算番茄炒蛋的热量并生成审核记录」
+
+#### `list_recipe_calibrations`
+- **描述**：查看菜谱热量校准审计记录
+- **参数**：`{ recipeId?: string, status?: "pending"|"approved"|"rejected"|"needs_review", limit?: number }`
+- **返回**：`{ summary, records }`
+- **场景**：「有哪些待审核的热量校准？」
+
+#### `review_recipe_calibration`
+- **描述**：更新某条校准记录的审核状态；只改审计记录，不改正式菜谱数据
+- **参数**：`{ calibrationId: number, status: "pending"|"approved"|"rejected"|"needs_review", reviewerNote?: string }`
+- **返回**：`{ success, record, officialRecipeUnchanged: true }`
+- **场景**：「把这条热量修正标记为需要复核」
+
+#### `remember`
+- **描述**：保存用户明确表达的长期事实
+- **参数**：`{ type, content, tags?, confidence? }`
+- **返回**：`{ success, memory, merged }`
+- **场景**：「我对花生过敏」「我不喜欢香菜」
+
+#### `recall`
+- **描述**：按文本、类型或标签召回长期记忆
+- **参数**：`{ text?, types?, tags?, limit? }`
+- **返回**：`{ memories }`
+- **场景**：推荐菜谱前检查过敏、忌口和偏好
+
+#### `forget`
+- **描述**：归档一条失效或错误的长期记忆
+- **参数**：`{ memoryId: number, reason?: string }`
+- **返回**：`{ success, memory }`
+- **场景**：「我现在可以吃花生了，把那条删掉」
+
+#### `list_user_facts`
+- **描述**：列出当前长期记忆
+- **参数**：`{ types?, tags?, includeArchived?, limit? }`
+- **返回**：`{ memories }`
+- **场景**：「你现在记得我什么？」
+
+#### `update_memory_confidence`
+- **描述**：更新某条记忆的置信度
+- **参数**：`{ memoryId: number, confidence: number }`
+- **返回**：`{ success, memory }`
+- **场景**：用户确认、质疑或修正某条记忆
 
 ### 3.4 执行类工具（操作应用）
 

@@ -2,5 +2,28 @@ node_modules/
 out/
 dist/
 *.log
+*.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# Generated artifacts
+output/
+
+# Local data caches (raw downloads etc.)
+data/raw/
+data/cache/
+data/download_kaggle.py
+data/*.csv
+
+# Local secrets / tooling configs
+.mcp.json
+.env
+.env.*
+
+# Kiro / atomcode local index
+.atomcode/
+.kiro/
+.vscode/
+
+# Stray driver / OS noise that ended up in the workspace
+NVIDIA Corporation/

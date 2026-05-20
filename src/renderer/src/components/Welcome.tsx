@@ -6,6 +6,8 @@ import {
   EditOutlined,
   RobotOutlined,
   SmileOutlined,
+  ThunderboltOutlined,
+  FormOutlined,
 } from '@ant-design/icons'
 import { getSettings, saveSettings } from '../stores/settings'
 import './Welcome.css'
@@ -29,7 +31,7 @@ const featureCards = [
     icon: <BookOutlined />,
     color: '#B8E8D0',
     title: '浏览菜谱',
-    description: '120 道中西式菜谱随时查看，包含食材、步骤和营养信息',
+    description: '130 道中西式菜谱随时查看，包含食材、步骤和营养信息',
   },
   {
     icon: <RobotOutlined />,
@@ -61,6 +63,20 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
   const handleSkip = (): void => {
     const settings = getSettings()
     saveSettings({ ...settings, onboarded: true })
+    onFinish()
+  }
+
+  const handleExpressOnboarding = (): void => {
+    const settings = getSettings()
+    saveSettings({ ...settings, onboarded: true })
+    window.location.hash = '#/express-onboarding'
+    onFinish()
+  }
+
+  const handleFullOnboarding = (): void => {
+    const settings = getSettings()
+    saveSettings({ ...settings, onboarded: true })
+    window.location.hash = '#/chat'
     onFinish()
   }
 
@@ -178,15 +194,26 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
               ))}
             </div>
 
-            <Button
-              type="primary"
-              size="large"
-              icon={<ArrowRightOutlined />}
-              onClick={handleNext}
-              className="welcome-main-btn"
-            >
-              开始使用
-            </Button>
+            <div className="welcome-onboarding-paths">
+              <Button
+                type="primary"
+                size="large"
+                icon={<ThunderboltOutlined />}
+                onClick={handleExpressOnboarding}
+                className="welcome-main-btn"
+              >
+                一分钟开始减肥
+              </Button>
+              <Button
+                type="default"
+                size="large"
+                icon={<FormOutlined />}
+                onClick={handleFullOnboarding}
+                className="welcome-secondary-btn"
+              >
+                完整问答版
+              </Button>
+            </div>
           </div>
         )}
 

@@ -1,0 +1,117 @@
+/* AutopilotSuggestion — meal suggestion card */
+
+.autopilot-suggestion {
+  margin-bottom: 16px;
+}
+
+.autopilot-suggestion .ant-card-body {
+  padding: 12px 16px;
+}
+
+.autopilot-suggestion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.autopilot-suggestion-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.autopilot-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 244, 235, 0.95), rgba(255, 250, 243, 0.98));
+  border: 1px solid rgba(255, 182, 193, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.autopilot-candidate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 143, 163, 0.1);
+}
+
+.autopilot-candidate-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.autopilot-candidate-emoji {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.autopilot-candidate-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.autopilot-candidate-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autopilot-candidate-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.autopilot-candidate-reasoning {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.autopilot-candidate-action {
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.autopilot-suggestion-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(125, 107, 93, 0.12);
+}
+
+.autopilot-suggestion-fallback {
+  text-align: center;
+  padding: 16px 12px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .autopilot-candidate {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .autopilot-candidate-action {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+
+  .autopilot-candidate-reasoning {
+    max-width: 100%;
+  }
+}

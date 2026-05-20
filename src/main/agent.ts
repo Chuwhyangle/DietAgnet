@@ -1,9 +1,10 @@
-import { app, ipcMain, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import {
   AGENT_PROVIDER_PRESETS,
   normalizeAgentSettings,
+  type AgentToolDefinition,
   type AgentChatRequest,
   type AgentChatResponse,
   type AgentConnectionSettings,
@@ -11,10 +12,18 @@ import {
   type AgentDiagnosticsResponse,
   type AgentErrorCode,
   type AgentErrorInfo,
+  type AgentRequestPurpose,
+  type AgentTokenUsage,
+  type AgentUsageModelSummary,
+  type AgentUsageRecord,
+  type AgentUsageStatsResponse,
   type AgentProvider,
   type ApiKeyStatusResponse,
+  type DesktopNotificationRequest,
+  type DesktopNotificationResponse,
   type RemoteChatMessage,
   type RemoteToolCall,
+  type ResolvedToolCompatibilityMode,
   type SaveApiKeyRequest,
 } from '../shared/agent'
 
@@ -24,6 +33,9 @@ const CHANNELS = {
   clearApiKey: 'agent:clear-api-key',
   chatCompletions: 'agent:chat-completions',
   runDiagnostics: 'agent:run-diagnostics',
+  getUsageStats: 'agent:get-usage-stats',
+  clearUsageStats: 'agent:clear-usage-stats',
+  showNotification: 'agent:show-notification',
 } as const
 
 interface SecureConfigFile {
@@ -32,14 +44,28 @@ interface SecureConfigFile {
   apiKeys: Partial<Record<AgentProvider, string>>
 }
 
+interface UsageStatsFile {
+  version: 1
+  records: AgentUsageRecord[]
+}
+
 interface RemoteChatCompletionResponse {
   id?: string
   model?: string
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+    promptTokens?: number
+    completionTokens?: number
+    totalTokens?: number
+  }
   choices?: Array<{
     finish_reason?: string | null
     message?: {
       role?: 'assistant'
       content?: string | null | Array<{ text?: string | { value?: string }; type?: string }>
+      reasoning_content?: string | null | Array<{ text?: string | { value?: string }; type?: string }>
       tool_calls?: RemoteToolCall[]
       function_call?: {
         name?: string
@@ -56,6 +82,9 @@ interface RequestExecutionResult {
   payload: RemoteChatCompletionResponse
 }
 
+const MAX_USAGE_RECORDS = 500
+const customToolCompatibilityCache = new Map<string, ResolvedToolCompatibilityMode>()
+
 class AgentRequestError extends Error {
   info: AgentErrorInfo
 
@@ -68,6 +97,188 @@ class AgentRequestError extends Error {
 
 function getSecureConfigPath(): string {
   return join(app.getPath('userData'), 'secure-config.json')
+}
+
+function getUsageStatsPath(): string {
+  return join(app.getPath('userData'), 'agent-usage-stats.json')
+}
+
+function readUsageRecords(): AgentUsageRecord[] {
+  const statsPath = getUsageStatsPath()
+  if (!existsSync(statsPath)) {
+    return []
+  }
+
+  try {
+    const raw = readFileSync(statsPath, 'utf8')
+    const parsed = JSON.parse(raw) as Partial<UsageStatsFile>
+    return Array.isArray(parsed.records) ? parsed.records : []
+  } catch (error) {
+    console.error('Failed to read usage stats:', error)
+    return []
+  }
+}
+
+function writeUsageRecords(records: AgentUsageRecord[]): void {
+  const statsPath = getUsageStatsPath()
+  mkdirSync(dirname(statsPath), { recursive: true })
+  writeFileSync(
+    statsPath,
+    JSON.stringify(
+      {
+        version: 1,
+        records: records.slice(0, MAX_USAGE_RECORDS),
+      } satisfies UsageStatsFile,
+      null,
+      2,
+    ),
+    'utf8',
+  )
+}
+
+function normalizeUsage(usage: RemoteChatCompletionResponse['usage']): AgentTokenUsage {
+  if (!usage) {
+    return {}
+  }
+
+  return {
+    promptTokens: usage.prompt_tokens ?? usage.promptTokens,
+    completionTokens: usage.completion_tokens ?? usage.completionTokens,
+    totalTokens: usage.total_tokens ?? usage.totalTokens,
+  }
+}
+
+function hasUsageData(usage: AgentTokenUsage): boolean {
+  return [usage.promptTokens, usage.completionTokens, usage.totalTokens].some((value) => typeof value === 'number')
+}
+
+function recordUsage(params: {
+  settings: AgentConnectionSettings
+  purpose: AgentRequestPurpose
+  endpoint: string
+  payload: RemoteChatCompletionResponse
+}): void {
+  const usage = normalizeUsage(params.payload.usage)
+  const model = params.payload.model || params.settings.model
+  const record: AgentUsageRecord = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    timestamp: new Date().toISOString(),
+    provider: params.settings.provider,
+    providerName: AGENT_PROVIDER_PRESETS[params.settings.provider].name,
+    model,
+    purpose: params.purpose,
+    endpoint: params.endpoint,
+    usage,
+    usageAvailable: hasUsageData(usage),
+  }
+
+  writeUsageRecords([record, ...readUsageRecords()].slice(0, MAX_USAGE_RECORDS))
+}
+
+function buildUsageStats(records = readUsageRecords()): AgentUsageStatsResponse {
+  const byModel = new Map<string, AgentUsageModelSummary>()
+  const totals = records.reduce(
+    (summary, record) => {
+      const promptTokens = record.usage.promptTokens ?? 0
+      const completionTokens = record.usage.completionTokens ?? 0
+      const totalTokens = record.usage.totalTokens ?? promptTokens + completionTokens
+      const modelKey = `${record.provider}:${record.model}`
+      const modelSummary = byModel.get(modelKey) ?? {
+        key: modelKey,
+        provider: record.provider,
+        providerName: record.providerName,
+        model: record.model,
+        calls: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      }
+
+      modelSummary.calls += 1
+      modelSummary.promptTokens += promptTokens
+      modelSummary.completionTokens += completionTokens
+      modelSummary.totalTokens += totalTokens
+      byModel.set(modelKey, modelSummary)
+
+      summary.totalCalls += 1
+      summary.chatCalls += record.purpose === 'chat' ? 1 : 0
+      summary.diagnosticCalls += record.purpose === 'diagnostics' ? 1 : 0
+      summary.promptTokens += promptTokens
+      summary.completionTokens += completionTokens
+      summary.totalTokens += totalTokens
+      summary.usageAvailableCalls += record.usageAvailable ? 1 : 0
+
+      return summary
+    },
+    {
+      totalCalls: 0,
+      chatCalls: 0,
+      diagnosticCalls: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      usageAvailableCalls: 0,
+    },
+  )
+
+  return {
+    ...totals,
+    firstRecordedAt: records.length > 0 ? records[records.length - 1].timestamp : undefined,
+    latestRecordedAt: records[0]?.timestamp,
+    byModel: Array.from(byModel.values()).sort((left, right) => right.calls - left.calls),
+    recentRecords: records.slice(0, 20),
+  }
+}
+
+function showDesktopNotification(request: DesktopNotificationRequest): DesktopNotificationResponse {
+  if (!Notification.isSupported()) {
+    return {
+      supported: false,
+      shown: false,
+      reason: 'system_notifications_not_supported',
+    }
+  }
+
+  const title = request.title.trim()
+  const body = request.body.trim()
+
+  if (!title || !body) {
+    return {
+      supported: true,
+      shown: false,
+      reason: 'empty_notification',
+    }
+  }
+
+  const notification = new Notification({
+    title,
+    body,
+    silent: request.silent,
+    urgency: request.urgency,
+  })
+
+  notification.on('click', () => {
+    const [window] = BrowserWindow.getAllWindows()
+    if (window) {
+      if (window.isMinimized()) {
+        window.restore()
+      }
+      window.show()
+      window.focus()
+
+      // Route to the target page if specified
+      if (request.page) {
+        window.webContents.send('coaching:notification-clicked', request.page)
+      }
+    }
+  })
+
+  notification.show()
+
+  return {
+    supported: true,
+    shown: true,
+  }
 }
 
 function ensureEncryptionAvailable(): void {
@@ -125,16 +336,15 @@ function decryptSecret(value: string): string {
 function getApiKey(provider: AgentProvider): string | null {
   const config = readSecureConfig()
   const storedValue = config.apiKeys[provider]
-  if (!storedValue) {
-    return null
+  if (storedValue) {
+    try {
+      return decryptSecret(storedValue)
+    } catch (error) {
+      console.error('Failed to decrypt API key:', error)
+    }
   }
 
-  try {
-    return decryptSecret(storedValue)
-  } catch (error) {
-    console.error('Failed to decrypt API key:', error)
-    return null
-  }
+  return null
 }
 
 function saveApiKey({ provider, apiKey }: SaveApiKeyRequest): ApiKeyStatusResponse {
@@ -240,6 +450,218 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
 
+function serializeFunctionArguments(rawArguments: string | Record<string, unknown> | undefined): string {
+  if (!rawArguments) {
+    return '{}'
+  }
+
+  if (typeof rawArguments === 'string') {
+    return rawArguments
+  }
+
+  return JSON.stringify(rawArguments)
+}
+
+function normalizeMessageContent(content: string | null | undefined): string {
+  return typeof content === 'string' ? content : ''
+}
+
+function extractOptionalTextContent(
+  content:
+    | string
+    | null
+    | undefined
+    | Array<{ text?: string | { value?: string }; type?: string }>,
+): string | null {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    const text = content
+      .map((part) => {
+        if (typeof part?.text === 'string') {
+          return part.text
+        }
+
+        if (typeof part?.text === 'object' && part?.text && 'value' in part.text) {
+          return part.text.value ?? ''
+        }
+
+        return ''
+      })
+      .filter((item) => Boolean(item))
+      .join('\n')
+      .trim()
+
+    return text || null
+  }
+
+  return null
+}
+
+function sanitizeMessagesForRemote(messages: RemoteChatMessage[]): RemoteChatMessage[] {
+  return messages.map((message) => {
+    if (message.role === 'assistant') {
+      return {
+        role: 'assistant',
+        content: normalizeMessageContent(message.content),
+        reasoning_content: message.reasoning_content ?? undefined,
+        tool_calls: Array.isArray(message.tool_calls) && message.tool_calls.length > 0
+          ? message.tool_calls
+          : undefined,
+        function_call: message.function_call,
+      }
+    }
+
+    if (message.role === 'tool') {
+      return {
+        role: 'tool',
+        tool_call_id: message.tool_call_id,
+        content: normalizeMessageContent(message.content),
+      }
+    }
+
+    if (message.role === 'function') {
+      return {
+        role: 'function',
+        name: message.name,
+        content: normalizeMessageContent(message.content),
+      }
+    }
+
+    return {
+      role: message.role,
+      content: normalizeMessageContent(message.content),
+      name: message.name,
+    }
+  })
+}
+
+function compactJsonSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) {
+    return schema.map((item) => compactJsonSchema(item))
+  }
+
+  if (!schema || typeof schema !== 'object') {
+    return schema
+  }
+
+  const source = schema as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+
+  if ('type' in source) {
+    next.type = source.type
+  }
+
+  if (Array.isArray(source.enum) && source.enum.length > 0) {
+    next.enum = source.enum
+  }
+
+  if (Array.isArray(source.required) && source.required.length > 0) {
+    next.required = source.required
+  }
+
+  if ('items' in source) {
+    next.items = compactJsonSchema(source.items)
+  }
+
+  if (
+    'properties' in source &&
+    source.properties &&
+    typeof source.properties === 'object' &&
+    !Array.isArray(source.properties)
+  ) {
+    next.properties = Object.fromEntries(
+      Object.entries(source.properties).map(([key, value]) => [key, compactJsonSchema(value)]),
+    )
+  }
+
+  if (typeof source.additionalProperties === 'boolean') {
+    next.additionalProperties = source.additionalProperties
+  }
+
+  if (typeof source.minimum === 'number') {
+    next.minimum = source.minimum
+  }
+
+  if (typeof source.maximum === 'number') {
+    next.maximum = source.maximum
+  }
+
+  if (typeof source.minItems === 'number') {
+    next.minItems = source.minItems
+  }
+
+  if (typeof source.maxItems === 'number') {
+    next.maxItems = source.maxItems
+  }
+
+  return next
+}
+
+function compactToolDefinition(tool: AgentToolDefinition): AgentToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: tool.function.name,
+      description: tool.function.description,
+      parameters: compactJsonSchema(tool.function.parameters) as Record<string, unknown>,
+    },
+  }
+}
+
+function normalizeToolsForRemote(
+  settings: AgentConnectionSettings,
+  tools: AgentToolDefinition[] | undefined,
+): AgentToolDefinition[] | undefined {
+  if (!tools || tools.length === 0) {
+    return undefined
+  }
+
+  if (settings.provider !== 'custom') {
+    return tools
+  }
+
+  return tools.map(compactToolDefinition)
+}
+
+function canTransformMessagesForLegacyFunctions(messages: RemoteChatMessage[]): boolean {
+  return messages.every((message) => !message.tool_calls || message.tool_calls.length <= 1)
+}
+
+function transformMessagesForLegacyFunctions(messages: RemoteChatMessage[]): RemoteChatMessage[] {
+  return messages
+    .map((message) => {
+      if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        const [firstToolCall] = message.tool_calls
+
+        return {
+          role: 'assistant',
+          content: normalizeMessageContent(message.content),
+          reasoning_content: message.reasoning_content ?? undefined,
+          function_call: {
+            name: firstToolCall.function.name,
+            arguments: serializeFunctionArguments(firstToolCall.function.arguments),
+          },
+        }
+      }
+
+      if (message.role === 'tool') {
+        return {
+          role: 'function',
+          name: message.name,
+          content: normalizeMessageContent(message.content),
+        }
+      }
+
+      return {
+        ...message,
+        content: normalizeMessageContent(message.content),
+      }
+    })
+}
+
 function resolveChatCompletionsEndpoint(baseUrl: string): string {
   const normalizedBaseUrl = trimTrailingSlash(baseUrl.trim())
 
@@ -248,6 +670,10 @@ function resolveChatCompletionsEndpoint(baseUrl: string): string {
   }
 
   return `${normalizedBaseUrl}/chat/completions`
+}
+
+function getToolCompatibilityCacheKey(settings: AgentConnectionSettings): string {
+  return `${resolveChatCompletionsEndpoint(settings.apiBaseUrl).toLowerCase()}::${settings.model.trim().toLowerCase()}`
 }
 
 function buildAgentErrorInfo(params: {
@@ -363,6 +789,87 @@ function detectErrorCode(params: {
   return 'unknown'
 }
 
+function isRemoteParamIncorrect(error: AgentRequestError): boolean {
+  const message = error.info.message.toLowerCase()
+  return error.info.status === 400 &&
+    /param incorrect|parameter|invalid.*param|bad request|tools|tool_choice|function/.test(message)
+}
+
+function stripToolMessages(messages: RemoteChatMessage[]): RemoteChatMessage[] {
+  return messages
+    .filter((message) => message.role !== 'tool' && message.role !== 'function')
+    .map((message) => {
+      if (message.role !== 'assistant' || (!message.tool_calls && !message.function_call)) {
+        return message
+      }
+
+      return {
+        role: 'assistant',
+        content: message.content ?? '',
+      }
+    })
+}
+
+function shouldRetryWithAlternateToolMode(error: AgentRequestError): boolean {
+  return error.info.code === 'tool_calls_unsupported' ||
+    error.info.status === 400 ||
+    error.info.status === 422 ||
+    isRemoteParamIncorrect(error)
+}
+
+function getToolCompatibilityCandidates(
+  settings: AgentConnectionSettings,
+  messages: RemoteChatMessage[],
+  hasTools: boolean,
+): ResolvedToolCompatibilityMode[] {
+  if (!hasTools) {
+    return ['plain_chat']
+  }
+
+  if (settings.provider !== 'custom') {
+    return ['openai_tools']
+  }
+
+  if (settings.toolCompatibility === 'plain_chat') {
+    return ['plain_chat']
+  }
+
+  const candidates: ResolvedToolCompatibilityMode[] = []
+  const seen = new Set<ResolvedToolCompatibilityMode>()
+  const addCandidate = (mode: ResolvedToolCompatibilityMode): void => {
+    if (seen.has(mode)) {
+      return
+    }
+
+    if (mode === 'legacy_functions' && !canTransformMessagesForLegacyFunctions(messages)) {
+      return
+    }
+
+    seen.add(mode)
+    candidates.push(mode)
+  }
+
+  if (settings.toolCompatibility !== 'auto') {
+    addCandidate(settings.toolCompatibility)
+    if (settings.toolCompatibility !== 'plain_chat') {
+      addCandidate('plain_chat')
+    }
+    return candidates
+  }
+
+  const cachedMode = customToolCompatibilityCache.get(getToolCompatibilityCacheKey(settings))
+  if (cachedMode && cachedMode !== 'plain_chat') {
+    addCandidate(cachedMode)
+  }
+
+  addCandidate('openai_tools')
+  addCandidate('openai_tools_no_choice')
+  addCandidate('legacy_functions')
+  addCandidate('plain_chat')
+
+  return candidates
+}
+
 function toAgentRequestError(params: {
   provider: AgentProvider
   status?: number
@@ -408,6 +915,8 @@ async function executeChatCompletionRequest(params: {
   tools?: AgentChatRequest['tools']
   temperature?: number
   maxTokens?: number
+  purpose?: AgentRequestPurpose
+  toolMode?: ResolvedToolCompatibilityMode
 }): Promise<RequestExecutionResult> {
   const endpoint = resolveChatCompletionsEndpoint(params.settings.apiBaseUrl)
   const abortController = new AbortController()
@@ -416,21 +925,43 @@ async function executeChatCompletionRequest(params: {
   let response: Response
 
   try {
+    const toolMode = params.toolMode ?? (params.tools && params.tools.length > 0 ? 'openai_tools' : 'plain_chat')
+    const tools = normalizeToolsForRemote(params.settings, params.tools)
+    const requestMessages = toolMode === 'legacy_functions'
+      ? sanitizeMessagesForRemote(transformMessagesForLegacyFunctions(params.messages))
+      : toolMode === 'plain_chat'
+        ? sanitizeMessagesForRemote(stripToolMessages(params.messages))
+        : sanitizeMessagesForRemote(params.messages)
+    const body: Record<string, unknown> = {
+      model: params.settings.model,
+      messages: requestMessages,
+    }
+
+    if (typeof params.temperature === 'number') {
+      body.temperature = params.temperature
+    }
+
+    if (typeof params.maxTokens === 'number') {
+      body.max_tokens = params.maxTokens
+    }
+
+    if (toolMode === 'openai_tools' && tools) {
+      body.tools = tools
+      body.tool_choice = 'auto'
+    } else if (toolMode === 'openai_tools_no_choice' && tools) {
+      body.tools = tools
+    } else if (toolMode === 'legacy_functions' && tools) {
+      body.functions = tools.map((tool) => tool.function)
+      body.function_call = 'auto'
+    }
+
     response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${params.apiKey}`,
       },
-      body: JSON.stringify({
-        model: params.settings.model,
-        messages: params.messages,
-        tools: params.tools && params.tools.length > 0 ? params.tools : undefined,
-        tool_choice: params.tools && params.tools.length > 0 ? 'auto' : undefined,
-        stream: false,
-        temperature: params.temperature ?? 0.4,
-        max_tokens: params.maxTokens ?? 1200,
-      }),
+      body: JSON.stringify(body),
       signal: abortController.signal,
     })
   } catch (error) {
@@ -474,7 +1005,77 @@ async function executeChatCompletionRequest(params: {
     })
   }
 
+  recordUsage({
+    settings: params.settings,
+    purpose: params.purpose ?? 'chat',
+    endpoint,
+    payload,
+  })
+
   return { payload }
+}
+
+async function executeCompatibleChatCompletionRequest(params: {
+  settings: AgentConnectionSettings
+  apiKey: string
+  messages: RemoteChatMessage[]
+  tools?: AgentToolDefinition[]
+  temperature?: number
+  maxTokens?: number
+  purpose?: AgentRequestPurpose
+}): Promise<RequestExecutionResult & {
+  toolFallback: boolean
+  toolRequestMode: ResolvedToolCompatibilityMode
+}> {
+  const candidates = getToolCompatibilityCandidates(
+    params.settings,
+    params.messages,
+    Boolean(params.tools && params.tools.length > 0),
+  )
+
+  let lastError: AgentRequestError | null = null
+
+  for (const toolRequestMode of candidates) {
+    try {
+      const result = await executeChatCompletionRequest({
+        ...params,
+        toolMode: toolRequestMode,
+      })
+
+      if (
+        params.settings.provider === 'custom' &&
+        params.tools &&
+        params.tools.length > 0 &&
+        toolRequestMode !== 'plain_chat'
+      ) {
+        customToolCompatibilityCache.set(getToolCompatibilityCacheKey(params.settings), toolRequestMode)
+      }
+
+      return {
+        ...result,
+        toolFallback: toolRequestMode === 'plain_chat' && Boolean(params.tools && params.tools.length > 0),
+        toolRequestMode,
+      }
+    } catch (error) {
+      if (
+        !(error instanceof AgentRequestError) ||
+        toolRequestMode === 'plain_chat' ||
+        !params.tools ||
+        params.tools.length === 0 ||
+        !shouldRetryWithAlternateToolMode(error)
+      ) {
+        throw error
+      }
+
+      lastError = error
+    }
+  }
+
+  if (lastError) {
+    throw lastError
+  }
+
+  throw new Error('未能完成兼容请求。')
 }
 
 function buildDiagnosticResult(params: {
@@ -484,6 +1085,7 @@ function buildDiagnosticResult(params: {
   finishReason?: string | null
   preview?: string
   toolCallsCount?: number
+  toolRequestMode?: ResolvedToolCompatibilityMode
   error?: AgentErrorInfo
 }): AgentDiagnosticResult {
   return {
@@ -493,6 +1095,7 @@ function buildDiagnosticResult(params: {
     finishReason: params.finishReason,
     preview: params.preview,
     toolCallsCount: params.toolCallsCount,
+    toolRequestMode: params.toolRequestMode,
     error: params.error,
   }
 }
@@ -559,6 +1162,7 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
         },
       ],
       maxTokens: 120,
+      purpose: 'diagnostics',
     })
     const plainChoice = plainChatResult.payload.choices?.[0]
     diagnostics.plainChat = buildDiagnosticResult({
@@ -609,7 +1213,7 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
       },
     ]
 
-    const toolRoundOne = await executeChatCompletionRequest({
+    const toolRoundOne = await executeCompatibleChatCompletionRequest({
       settings: normalizedSettings,
       apiKey,
       messages: [
@@ -624,6 +1228,7 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
       ],
       tools: toolDefinition,
       maxTokens: 240,
+      purpose: 'diagnostics',
     })
 
     const firstChoice = toolRoundOne.payload.choices?.[0]
@@ -642,6 +1247,7 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
         message: error.message,
         finishReason: firstChoice?.finish_reason ?? null,
         preview: extractTextContent(firstChoice?.message?.content),
+        toolRequestMode: toolRoundOne.toolRequestMode,
         error,
       })
 
@@ -652,7 +1258,37 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
     const toolRoundTwo = await executeChatCompletionRequest({
       settings: normalizedSettings,
       apiKey,
-      messages: [
+      messages: toolRoundOne.toolRequestMode === 'legacy_functions'
+        ? [
+          {
+            role: 'system',
+            content: '你是测试助手。用户要求时优先调用工具。',
+          },
+          {
+            role: 'user',
+            content: '请调用 get_today_nutrition 工具，然后简短说明。',
+          },
+          {
+            role: 'assistant',
+            content: extractTextContent(firstChoice?.message?.content) || null,
+            function_call: {
+              name: firstToolCall.function.name,
+              arguments: serializeFunctionArguments(firstToolCall.function.arguments),
+            },
+          },
+          {
+            role: 'function',
+            name: firstToolCall.function.name,
+            content: JSON.stringify({
+              calories: 123,
+              protein: 10,
+              carbs: 20,
+              fat: 3,
+              mealCount: 1,
+            }),
+          },
+        ]
+        : [
         {
           role: 'system',
           content: '你是测试助手。用户要求时优先调用工具。',
@@ -664,12 +1300,12 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
         {
           role: 'assistant',
           content: extractTextContent(firstChoice?.message?.content) || null,
+          reasoning_content: extractOptionalTextContent(firstChoice?.message?.reasoning_content),
           tool_calls: toolCalls,
         },
         {
           role: 'tool',
           tool_call_id: firstToolCall.id,
-          name: firstToolCall.function.name,
           content: JSON.stringify({
             calories: 123,
             protein: 10,
@@ -678,9 +1314,11 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
             mealCount: 1,
           }),
         },
-      ],
+        ],
       tools: toolDefinition,
       maxTokens: 240,
+      purpose: 'diagnostics',
+      toolMode: toolRoundOne.toolRequestMode,
     })
 
     const secondChoice = toolRoundTwo.payload.choices?.[0]
@@ -691,6 +1329,7 @@ async function runDiagnostics(settings: AgentConnectionSettings): Promise<AgentD
       finishReason: secondChoice?.finish_reason ?? null,
       preview: extractTextContent(secondChoice?.message?.content),
       toolCallsCount: toolCalls.length,
+      toolRequestMode: toolRoundOne.toolRequestMode,
     })
   } catch (error) {
     const requestError = error instanceof AgentRequestError
@@ -741,22 +1380,26 @@ export function registerAgentIpcHandlers(): void {
       throw new Error('请先填写模型和 Base URL。')
     }
 
-    const { payload } = await executeChatCompletionRequest({
+    const result = await executeCompatibleChatCompletionRequest({
       settings,
       apiKey,
       messages: request.messages,
       tools: request.tools,
       temperature: request.temperature,
       maxTokens: request.maxTokens,
+      purpose: 'chat',
     })
+    const payload = result.payload
 
     const choice = payload.choices?.[0]
     const normalizedToolCalls = normalizeToolCalls(choice?.message)
     const normalizedContent = extractTextContent(choice?.message?.content)
+    const normalizedReasoningContent = extractOptionalTextContent(choice?.message?.reasoning_content)
     const assistantMessage: RemoteChatMessage = {
       role: 'assistant',
       content: normalizedToolCalls.length > 0 && !normalizedContent ? null : normalizedContent,
-      tool_calls: normalizedToolCalls,
+      reasoning_content: normalizedReasoningContent,
+      tool_calls: normalizedToolCalls.length > 0 ? normalizedToolCalls : undefined,
     }
 
     if (!choice?.message) {
@@ -785,10 +1428,26 @@ export function registerAgentIpcHandlers(): void {
       toolCalls,
       assistantMessage,
       model: payload.model,
+      usage: normalizeUsage(payload.usage),
+      toolFallback: result.toolFallback,
+      toolRequestMode: result.toolRequestMode,
     }
   })
 
   ipcMain.handle(CHANNELS.runDiagnostics, async (_event, settings: AgentConnectionSettings) => {
     return runDiagnostics(settings)
+  })
+
+  ipcMain.handle(CHANNELS.getUsageStats, () => {
+    return buildUsageStats()
+  })
+
+  ipcMain.handle(CHANNELS.clearUsageStats, () => {
+    writeUsageRecords([])
+    return buildUsageStats([])
+  })
+
+  ipcMain.handle(CHANNELS.showNotification, (_event, request: DesktopNotificationRequest) => {
+    return showDesktopNotification(request)
   })
 }

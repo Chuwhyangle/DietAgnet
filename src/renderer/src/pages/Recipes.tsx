@@ -1,8 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, Input, Tag, Row, Col, Typography, Empty, Modal, List } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import { recipes, type Recipe } from '../data/recipes'
-import { additionalChineseRecipes, westernRecipes } from '../data/recipeExtensions'
+import { additionalChineseRecipes, stapleFoodRecipes } from '../data/chineseRecipes'
+import { westernRecipes } from '../data/westernRecipes'
+import { getAllRecipesWithCustomFoods } from '../stores/customFoods'
+import { DIET_LOG_UPDATED_EVENT, RECIPE_CALIBRATION_UPDATED_EVENT } from '../stores/events'
 import './Recipes.css'
 
 const { Title, Text } = Typography
@@ -20,9 +23,10 @@ const categoryColors: Record<string, string> = {
   '西式': '#7BA7FF',
 }
 
-// 新增菜谱 ID 集合（来自 recipeExtensions.ts 的扩展中式 + 西式菜）
+// 新增菜谱 ID 集合（扩展中式 + 西式菜）
 const newRecipeIds = new Set<string>([
   ...additionalChineseRecipes.map((r) => r.id),
+  ...stapleFoodRecipes.map((r) => r.id),
   ...westernRecipes.map((r) => r.id),
 ])
 
@@ -30,15 +34,30 @@ function RecipesPage(): JSX.Element {
   const [searchText, setSearchText] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
+  const [recipesVersion, setRecipesVersion] = useState(0)
+  const allRecipes = useMemo(() => getAllRecipesWithCustomFoods(recipes), [recipesVersion])
+
+  useEffect(() => {
+    const handleRecipesUpdated = (): void => {
+      setRecipesVersion((current) => current + 1)
+    }
+
+    window.addEventListener(DIET_LOG_UPDATED_EVENT, handleRecipesUpdated)
+    window.addEventListener(RECIPE_CALIBRATION_UPDATED_EVENT, handleRecipesUpdated)
+    return () => {
+      window.removeEventListener(DIET_LOG_UPDATED_EVENT, handleRecipesUpdated)
+      window.removeEventListener(RECIPE_CALIBRATION_UPDATED_EVENT, handleRecipesUpdated)
+    }
+  }, [])
 
   // 分类列表 + 每个分类下的菜谱数（用于分类tag数量徽章）
   const categoryStats = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const recipe of recipes) {
+    for (const recipe of allRecipes) {
       counts.set(recipe.category, (counts.get(recipe.category) ?? 0) + 1)
     }
     return Array.from(counts.entries())
-  }, [])
+  }, [allRecipes])
 
   const categories = useMemo(() => categoryStats.map(([cat]) => cat), [categoryStats])
   const categoryCountMap = useMemo(
@@ -47,36 +66,36 @@ function RecipesPage(): JSX.Element {
   )
 
   const westernRecipeCount = useMemo(
-    () => recipes.filter((recipe) => recipe.category === '西式').length,
-    [],
+    () => allRecipes.filter((recipe) => recipe.category === '西式').length,
+    [allRecipes],
   )
 
   const newRecipeCount = useMemo(
-    () => recipes.filter((recipe) => newRecipeIds.has(recipe.id)).length,
-    [],
+    () => allRecipes.filter((recipe) => newRecipeIds.has(recipe.id)).length,
+    [allRecipes],
   )
 
   const filteredRecipes = useMemo(() => {
-    return recipes.filter(recipe => {
+    return allRecipes.filter(recipe => {
       const matchSearch = !searchText ||
         recipe.name.includes(searchText) ||
         recipe.ingredients.some(i => i.name.includes(searchText))
       const matchCategory = !selectedCategory || recipe.category === selectedCategory
       return matchSearch && matchCategory
     })
-  }, [searchText, selectedCategory])
+  }, [allRecipes, searchText, selectedCategory])
 
   return (
     <div className="recipes-page">
       <div className="recipes-header">
         <Title level={3}>🍳 猫猫虫的菜谱本</Title>
-        <Text type="secondary">精选 {recipes.length} 道中西式菜谱，总有一道适合今天的你~</Text>
+        <Text type="secondary">精选 {allRecipes.length} 道中西式菜谱，总有一道适合今天的你~</Text>
       </div>
 
       <div className="recipes-overview">
         <div className="recipes-overview-card">
           <span>总菜谱</span>
-          <strong>{recipes.length}</strong>
+          <strong>{allRecipes.length}</strong>
           <Text type="secondary">覆盖家常、早餐、甜品与西式料理</Text>
         </div>
         <div className="recipes-overview-card recipes-overview-card-western">
@@ -106,7 +125,7 @@ function RecipesPage(): JSX.Element {
             onClick={() => setSelectedCategory(null)}
           >
             <span className="cat-tag-label">全部</span>
-            <span className="cat-tag-count">{recipes.length}</span>
+            <span className="cat-tag-count">{allRecipes.length}</span>
           </Tag>
           {categories.map(cat => (
             <Tag

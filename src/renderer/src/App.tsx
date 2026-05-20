@@ -1,15 +1,20 @@
-import { useEffect, useState, type AnimationEvent } from 'react'
-import { ConfigProvider, theme } from 'antd'
+import { lazy, Suspense, useEffect, useState, type AnimationEvent } from 'react'
+import { ConfigProvider, Spin, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import Welcome from './components/Welcome'
-import HomePage from './pages/Home'
-import RecipesPage from './pages/Recipes'
-import DietLogPage from './pages/DietLog'
-import ChatPage from './pages/Chat'
-import SettingsPage from './pages/Settings'
+import { registerDietLogCoachReactions } from './coach/dietLogCoach'
 import { getSettings } from './stores/settings'
+import { startNotificationClickListener } from './coaching/notificationRouter'
+
+const HomePage = lazy(() => import('./pages/Home'))
+const RecipesPage = lazy(() => import('./pages/Recipes'))
+const DietLogPage = lazy(() => import('./pages/DietLog'))
+const ChatPage = lazy(() => import('./pages/Chat'))
+const SettingsPage = lazy(() => import('./pages/Settings'))
+const ExpressOnboardingPage = lazy(() => import('./pages/ExpressOnboarding'))
 
 // 猫猫虫 Ant Design 主题配置
 const caterpillarTheme = {
@@ -32,6 +37,7 @@ const caterpillarTheme = {
 
 function AnimatedRoutes(): JSX.Element {
   const location = useLocation()
+  const navigate = useNavigate()
   const [displayLocation, setDisplayLocation] = useState(location)
   const [transitionStage, setTransitionStage] = useState<'page-enter' | 'page-exit'>('page-enter')
 
@@ -40,6 +46,11 @@ function AnimatedRoutes(): JSX.Element {
       setTransitionStage('page-exit')
     }
   }, [displayLocation.pathname, location])
+
+  // Listen for notification click routing from main process
+  useEffect(() => {
+    return startNotificationClickListener(navigate)
+  }, [navigate])
 
   const handleAnimationEnd = (event: AnimationEvent<HTMLDivElement>): void => {
     if (event.target !== event.currentTarget || transitionStage !== 'page-exit') {
@@ -52,13 +63,16 @@ function AnimatedRoutes(): JSX.Element {
 
   return (
     <div className={`route-stage ${transitionStage}`} onAnimationEnd={handleAnimationEnd}>
-      <Routes location={displayLocation}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/recipes" element={<RecipesPage />} />
-        <Route path="/diet-log" element={<DietLogPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Routes>
+      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><Spin size="large" /></div>}>
+        <Routes location={displayLocation}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/recipes" element={<RecipesPage />} />
+          <Route path="/diet-log" element={<DietLogPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/express-onboarding" element={<ExpressOnboardingPage />} />
+        </Routes>
+      </Suspense>
     </div>
   )
 }
@@ -66,14 +80,20 @@ function AnimatedRoutes(): JSX.Element {
 function App(): JSX.Element {
   const [showWelcome, setShowWelcome] = useState(() => !getSettings().onboarded)
 
+  useEffect(() => {
+    return registerDietLogCoachReactions()
+  }, [])
+
   return (
     <ConfigProvider theme={caterpillarTheme} locale={zhCN}>
-      {showWelcome && <Welcome onFinish={() => setShowWelcome(false)} />}
-      <HashRouter>
-        <AppLayout>
-          <AnimatedRoutes />
-        </AppLayout>
-      </HashRouter>
+      <ErrorBoundary>
+        {showWelcome && <Welcome onFinish={() => setShowWelcome(false)} />}
+        <HashRouter>
+          <AppLayout>
+            <AnimatedRoutes />
+          </AppLayout>
+        </HashRouter>
+      </ErrorBoundary>
     </ConfigProvider>
   )
 }
