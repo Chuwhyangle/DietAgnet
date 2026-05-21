@@ -545,6 +545,23 @@ export async function saveDailyPlanAdjustment(
     id,
   }
 
+  await planningDb.coachingAuditLog.add({
+    actor: 'agent',
+    action: 'daily_plan_adjustment.saved',
+    timestamp,
+    payload: {
+      adjustmentId: id,
+      date: savedAdjustment.date,
+      ruleId: savedAdjustment.ruleId,
+      mealType: savedAdjustment.mealType,
+      suggestionType: savedAdjustment.suggestionType,
+      plannedCalories: savedAdjustment.plannedCalories,
+      actualCalories: savedAdjustment.actualCalories,
+      deltaCalories: savedAdjustment.deltaCalories,
+      generatedBy: savedAdjustment.generatedBy,
+    },
+  })
+
   emitPlanningUpdated()
   return savedAdjustment
 }
@@ -602,6 +619,20 @@ export async function updateDailyPlanAdjustmentResponse(
   }
 
   await planningDb.dailyPlanAdjustments.put(nextAdjustment)
+  await planningDb.coachingAuditLog.add({
+    actor: 'user',
+    action: 'daily_plan_adjustment.response',
+    timestamp: nextAdjustment.updatedAt,
+    payload: {
+      adjustmentId,
+      date: nextAdjustment.date,
+      ruleId: nextAdjustment.ruleId,
+      mealType: nextAdjustment.mealType,
+      suggestionType: nextAdjustment.suggestionType,
+      userResponse,
+      deltaCalories: nextAdjustment.deltaCalories,
+    },
+  })
   emitPlanningUpdated()
   return cloneDailyPlanAdjustment(nextAdjustment)
 }

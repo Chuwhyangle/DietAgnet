@@ -39,11 +39,65 @@ vi.mock('../../stores/settings', () => ({
 vi.mock('../../stores/planning', () => ({
   getLatestPersonalDietPlan: vi.fn(() => Promise.resolve(null)),
   getConfirmedPlannedMealsForDate: vi.fn(() => Promise.resolve([])),
-  saveDailyPlanAdjustment: vi.fn(() => Promise.resolve({ id: 1 })),
+  getCurrentPlanningProfile: vi.fn(() => Promise.resolve(null)),
+  getUserMemories: vi.fn(() => Promise.resolve([])),
+  saveDailyPlanAdjustment: vi.fn((input) => Promise.resolve({
+    id: 1,
+    ...input,
+    createdAt: '2024-06-15T08:00:00.000Z',
+    updatedAt: '2024-06-15T08:00:00.000Z',
+  })),
 }))
 
-import { getDailyPlanGap } from '../dynamicPlan'
-import { getLatestPersonalDietPlan } from '../../stores/planning'
+import { buildDynamicPlanSuggestion, evaluateDailyPlanAdjustment, getDailyPlanGap } from '../dynamicPlan'
+import {
+  getConfirmedPlannedMealsForDate,
+  getCurrentPlanningProfile,
+  getLatestPersonalDietPlan,
+  getUserMemories,
+  saveDailyPlanAdjustment,
+} from '../../stores/planning'
+
+function seedLunchLog(date: string, calories: number): void {
+  localStorage.setItem(`diet-agent-log-${date}`, JSON.stringify({
+    date,
+    meals: [
+      {
+        type: 'lunch',
+        items: [
+          {
+            recipeId: `test-${calories}`,
+            name: '测试午餐',
+            servings: 1,
+            calories,
+            protein: 20,
+            carbs: 40,
+            fat: 10,
+          },
+        ],
+      },
+    ],
+  }))
+}
+
+function mockLunchPlan(calories = 800): void {
+  vi.mocked(getConfirmedPlannedMealsForDate).mockResolvedValueOnce([
+    {
+      id: 10,
+      date: '2024-06-15',
+      mealType: 'lunch',
+      items: [],
+      totalCalories: calories,
+      totalProtein: 30,
+      totalCarbs: 80,
+      totalFat: 20,
+      source: 'manual',
+      status: 'confirmed',
+      createdAt: '2024-06-15T00:00:00.000Z',
+      updatedAt: '2024-06-15T00:00:00.000Z',
+    },
+  ])
+}
 
 describe('planning/dynamicPlan.getDailyPlanGap', () => {
   beforeEach(() => {
@@ -51,6 +105,11 @@ describe('planning/dynamicPlan.getDailyPlanGap', () => {
       now: new Date('2024-06-15T08:00:00Z'),
       toFake: ['Date'],
     })
+    vi.clearAllMocks()
+    vi.mocked(getLatestPersonalDietPlan).mockResolvedValue(null)
+    vi.mocked(getConfirmedPlannedMealsForDate).mockResolvedValue([])
+    vi.mocked(getCurrentPlanningProfile).mockResolvedValue(null)
+    vi.mocked(getUserMemories).mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -110,5 +169,97 @@ describe('planning/dynamicPlan.getDailyPlanGap', () => {
     const gap = await getDailyPlanGap('2024-06-15')
     expect(gap?.dailyTarget).toBe(1700)
     expect(gap?.sourcePlanId).toBe(1)
+  })
+
+  it('returns supplement when lunch actual is clearly below the 800 kcal plan', async () => {
+    mockLunchPlan(800)
+    seedLunchLog('2024-06-15', 400)
+
+    const gap = await getDailyPlanGap('2024-06-15')
+    expect(gap).not.toBeNull()
+    const suggestion = buildDynamicPlanSuggestion(gap!, 'lunch')
+
+    expect(suggestion?.suggestionType).toBe('supplement')
+    expect(suggestion?.plannedCalories).toBe(800)
+    expect(suggestion?.actualCalories).toBe(400)
+    expect(suggestion?.deltaCalories).toBe(400)
+  })
+
+  it('returns reduce when lunch actual is clearly above the 800 kcal plan', async () => {
+    mockLunchPlan(800)
+    seedLunchLog('2024-06-15', 1200)
+
+    const gap = await getDailyPlanGap('2024-06-15')
+    const suggestion = buildDynamicPlanSuggestion(gap!, 'lunch')
+
+    expect(suggestion?.suggestionType).toBe('reduce')
+    expect(suggestion?.plannedCalories).toBe(800)
+    expect(suggestion?.actualCalories).toBe(1200)
+    expect(suggestion?.deltaCalories).toBe(-400)
+    expect(suggestion?.suggestionText).not.toMatch(/跳过下一餐|完全不吃|极端节食|不吃饭/)
+  })
+
+  it('returns maintain for a lunch close to plan and can persist the low-noise audit suggestion', async () => {
+    mockLunchPlan(800)
+    seedLunchLog('2024-06-15', 760)
+
+    const result = await evaluateDailyPlanAdjustment({
+      date: '2024-06-15',
+      mealType: 'lunch',
+      persist: true,
+      generatedBy: 'local_rule',
+    })
+
+    expect(result.suggestion?.suggestionType).toBe('maintain')
+    expect(result.savedAdjustment?.suggestionType).toBe('maintain')
+    expect(saveDailyPlanAdjustment).toHaveBeenCalled()
+  })
+
+  it('avoids prioritizing dairy when memory says the user is lactose intolerant', async () => {
+    mockLunchPlan(800)
+    seedLunchLog('2024-06-15', 400)
+    vi.mocked(getUserMemories).mockResolvedValueOnce([
+      {
+        id: 1,
+        type: 'avoidance',
+        content: '我乳糖不耐受，不喝牛奶',
+        normalizedContent: '乳糖不耐受 不喝牛奶',
+        tags: ['乳糖', '牛奶'],
+        source: 'user_explicit',
+        confidence: 0.95,
+        status: 'active',
+        createdAt: '2024-06-01T00:00:00.000Z',
+        updatedAt: '2024-06-01T00:00:00.000Z',
+        mergedFromIds: [],
+      },
+    ])
+
+    const gap = await getDailyPlanGap('2024-06-15')
+    const suggestion = buildDynamicPlanSuggestion(gap!, 'lunch')
+
+    expect(suggestion?.suggestionText).toContain('豆制品')
+    expect(suggestion?.suggestionText).not.toContain('无糖酸奶')
+    expect(gap?.safetyContext.avoidDairy).toBe(true)
+  })
+
+  it('uses conservative safety wording for BMI-low or medical-note contexts', async () => {
+    mockLunchPlan(800)
+    seedLunchLog('2024-06-15', 400)
+    vi.mocked(getCurrentPlanningProfile).mockResolvedValueOnce({
+      id: 'current',
+      age: 16,
+      heightCm: 170,
+      weightKg: 48,
+      medicalNotes: '医生建议保守调整',
+      completionStatus: 'completed',
+      updatedAt: '2024-06-01T00:00:00.000Z',
+    })
+
+    const gap = await getDailyPlanGap('2024-06-15')
+    const suggestion = buildDynamicPlanSuggestion(gap!, 'lunch')
+
+    expect(gap?.safetyContext.conservative).toBe(true)
+    expect(suggestion?.suggestionText).toContain('请先按专业意见执行')
+    expect(suggestion?.suggestionText).not.toMatch(/跳过下一餐|完全不吃|极端节食/)
   })
 })

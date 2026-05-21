@@ -194,6 +194,48 @@ export interface SchedulerTickResult {
   escalated: boolean
   quietHoursActive: boolean
   cooldownActive: boolean
+  triggered: boolean
+  delivered: boolean
+  tickId: string
+  checkedAt: string
+  ruleId: string
+  reason:
+    | 'fired'
+    | 'escalated'
+    | 'quiet_hours'
+    | 'reminders_disabled'
+    | 'meal_reminders_disabled'
+    | 'before_window'
+    | 'already_logged'
+    | 'cooldown'
+    | 'dismiss_pause'
+    | 'weekly_checkin_fired'
+    | 'weekly_checkin_not_due'
+    | 'no_due_rule'
+  message: string
+  skipReason?: string
+  mealType?: MealType
+  isQuiet: boolean
+  isCoolingDown: boolean
+  isAlreadyLogged: boolean
+  isDismissPaused: boolean
+  isEscalated: boolean
+  dismissCount: number
+  cooldownUntil?: string
+  pauseUntil?: string
+  checkEvent?: ProactiveEvent
+  evaluatedRules: Array<{
+    ruleId: string
+    mealType?: MealType
+    due: boolean
+    alreadyLogged: boolean
+    coolingDown: boolean
+    dismissPaused: boolean
+    dismissCount: number
+    skipReason?: string
+    cooldownUntil?: string
+    pauseUntil?: string
+  }>
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,81 @@
+.agent-activity-card {
+  margin-top: 24px;
+  background: rgba(255, 252, 245, 0.94) !important;
+  border: 1px solid rgba(125, 211, 168, 0.22) !important;
+}
+
+.agent-activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.agent-activity-title {
+  margin: 10px 0 4px !important;
+}
+
+.agent-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-activity-item {
+  padding: 14px 16px;
+  border: 1px solid rgba(125, 107, 93, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.agent-activity-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.agent-activity-time {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agent-activity-message {
+  margin-bottom: 8px !important;
+}
+
+.agent-activity-payload {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(125, 107, 93, 0.06);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.agent-activity-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .agent-activity-header,
+  .agent-activity-item-head {
+    flex-direction: column;
+  }
+
+  .agent-activity-header .ant-btn {
+    width: 100%;
+  }
+
+  .agent-activity-time {
+    white-space: normal;
+  }
+}

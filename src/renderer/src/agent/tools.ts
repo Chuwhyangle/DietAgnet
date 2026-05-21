@@ -25,6 +25,7 @@ import {
 import {
   getLatestPersonalDietPlan,
   getRecentProactiveEvents,
+  saveProactiveEvent,
   updateDailyPlanAdjustmentResponse,
   savePlannedMeal,
   getPlannedMealsForDate,
@@ -71,6 +72,12 @@ const PAGE_PATHS: Record<AgentPage, string> = {
   chat: '/chat',
   settings: '/settings',
 }
+
+const MEAL_REMINDER_RULES: Array<{ ruleId: string; mealType: MealType }> = [
+  { ruleId: 'coaching_breakfast_reminder', mealType: 'breakfast' },
+  { ruleId: 'coaching_lunch_reminder', mealType: 'lunch' },
+  { ruleId: 'coaching_dinner_reminder', mealType: 'dinner' },
+]
 
 const toolDefinitions: AgentToolDefinition[] = [
   {
@@ -213,6 +220,10 @@ const toolDefinitions: AgentToolDefinition[] = [
           cooldownHours: {
             type: 'number',
             description: '同类提醒冷却小时，1-24。',
+          },
+          disableMealRemindersToday: {
+            type: 'boolean',
+            description: '仅暂停今天剩余时间的三餐记录提醒，不永久关闭提醒设置。',
           },
         },
       },
@@ -1066,6 +1077,14 @@ function toOptionalBoundedInteger(value: unknown, min: number, max: number): num
   return Math.min(Math.max(Math.round(numeric), min), max)
 }
 
+function toDateStringArg(value: unknown, fallback = dayjs().format('YYYY-MM-DD')): string {
+  const date = String(value ?? fallback).trim() || fallback
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || dayjs(date).format('YYYY-MM-DD') !== date) {
+    throw new Error('date 参数必须是 YYYY-MM-DD 格式。')
+  }
+  return date
+}
+
 function getRecipeCollection(): Recipe[] {
   return getAllRecipesWithCustomFoods(recipes)
 }
@@ -1604,7 +1623,7 @@ export async function executeToolCall(
     }
 
     case 'check_today_plan_gap': {
-      const date = String(args.date ?? dayjs().format('YYYY-MM-DD')).trim() || dayjs().format('YYYY-MM-DD')
+      const date = toDateStringArg(args.date)
       const gap = await getDailyPlanGap(date)
       return {
         date,
@@ -1614,7 +1633,7 @@ export async function executeToolCall(
     }
 
     case 'suggest_plan_adjustment': {
-      const date = String(args.date ?? dayjs().format('YYYY-MM-DD')).trim() || dayjs().format('YYYY-MM-DD')
+      const date = toDateStringArg(args.date)
       const mealType = isMealType(args.mealType) ? args.mealType : undefined
       const result = await evaluateDailyPlanAdjustment({
         date,
@@ -1667,6 +1686,7 @@ export async function executeToolCall(
       const quietStartHour = toOptionalBoundedInteger(args.quietStartHour, 0, 23)
       const quietEndHour = toOptionalBoundedInteger(args.quietEndHour, 0, 23)
       const cooldownHours = toOptionalBoundedInteger(args.cooldownHours, 1, 24)
+      const disableMealRemindersToday = args.disableMealRemindersToday === true
       const nextSettings = {
         ...settings,
         reminders: {
@@ -1689,9 +1709,27 @@ export async function executeToolCall(
 
       saveSettings(nextSettings)
 
+      const snoozedRules = disableMealRemindersToday
+        ? await Promise.all(MEAL_REMINDER_RULES.map((rule) => saveProactiveEvent({
+          ruleId: rule.ruleId,
+          trigger: 'context',
+          priority: 'low',
+          delivered: false,
+          message: '用户要求今天剩余时间不再提醒记录三餐。',
+          userResponse: 'snoozed',
+          cooldownUntil: dayjs().endOf('day').toISOString(),
+          payload: {
+            reason: 'user_disabled_meal_reminders_today',
+            mealType: rule.mealType,
+            until: dayjs().endOf('day').toISOString(),
+          },
+        })))
+        : []
+
       return {
         success: true,
         reminders: nextSettings.reminders,
+        snoozedRules,
       }
     }
 

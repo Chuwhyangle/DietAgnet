@@ -11,6 +11,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { resetPlanningDb, seedPlanningDb } from '../../../../test/doubles/dexie'
 import type { AgentToolInvocation } from '../../../../shared/agent'
+import {
+  getRecentProactiveEvents,
+  saveDailyPlanAdjustment,
+  savePersonalDietPlan,
+  savePlannedMeal,
+  savePlanningProfile,
+} from '../../stores/planning'
 
 // Seed settings into localStorage before importing tools
 const TEST_SETTINGS = {
@@ -41,7 +48,7 @@ function seedSettings(): void {
   localStorage.setItem('diet-agent-settings', JSON.stringify(TEST_SETTINGS))
 }
 
-function seedDietLog(date: string): void {
+function seedDietLog(date: string, calories = 180): void {
   const log = {
     date,
     meals: [
@@ -53,14 +60,58 @@ function seedDietLog(date: string): void {
             name: '番茄炒蛋',
             emoji: '🍳',
             servings: 1,
-            calories: 180,
-            nutrition: { protein: 12, carbs: 8, fat: 12 },
+            calories,
+            protein: 12,
+            carbs: 8,
+            fat: 12,
           },
         ],
       },
     ],
   }
-  localStorage.setItem(`diet-log-${date}`, JSON.stringify(log))
+  localStorage.setItem(`diet-agent-log-${date}`, JSON.stringify(log))
+}
+
+async function seedPlanGapFixture(date = '2024-06-15'): Promise<void> {
+  await savePlanningProfile({
+    age: 30,
+    gender: 'other',
+    mealsPerDay: 3,
+    completionStatus: 'completed',
+  })
+
+  await savePersonalDietPlan({
+    title: 'Test plan',
+    summary: 'Plan for tool tests',
+    dailyCalorieTarget: 2000,
+    proteinTarget: 100,
+    carbsTarget: 220,
+    fatTarget: 60,
+    mealGuidance: ['Keep meals balanced.'],
+    cautionNotes: [],
+    generationMode: 'local',
+  })
+
+  await savePlannedMeal({
+    date,
+    mealType: 'lunch',
+    items: [
+      {
+        name: 'Planned lunch',
+        servings: 1,
+        estimatedCalories: 800,
+        estimatedProtein: 32,
+        estimatedCarbs: 90,
+        estimatedFat: 24,
+      },
+    ],
+    totalCalories: 800,
+    totalProtein: 32,
+    totalCarbs: 90,
+    totalFat: 24,
+    source: 'manual',
+    status: 'confirmed',
+  })
 }
 
 // Import executeToolCall and AGENT_TOOLS after environment is ready
@@ -420,6 +471,37 @@ describe('agent/tools - executeToolCall', () => {
       expect(result).toHaveProperty('available')
       expect(typeof result.available).toBe('boolean')
     })
+
+    it('rejects invalid date input', async () => {
+      await expect(invoke('check_today_plan_gap', { date: '2024-99-99' })).rejects.toThrow('date')
+    })
+
+    it('returns planned-vs-actual meal gap details', async () => {
+      await seedPlanGapFixture()
+      seedDietLog('2024-06-15', 400)
+
+      const result = (await invoke('check_today_plan_gap', { date: '2024-06-15' })) as Record<string, unknown>
+      const gap = result.gap as Record<string, unknown>
+      const mealGaps = gap.mealGaps as Array<Record<string, unknown>>
+      const lunchGap = mealGaps.find((item) => item.mealType === 'lunch')
+
+      expect(result).toMatchObject({
+        date: '2024-06-15',
+        available: true,
+      })
+      expect(gap).toMatchObject({
+        dailyTarget: 2000,
+        actualCalories: 400,
+        remainingCalories: 1600,
+      })
+      expect(lunchGap).toMatchObject({
+        mealType: 'lunch',
+        plannedCalories: 800,
+        actualCalories: 400,
+        deltaCalories: 400,
+        hasPlannedMeal: true,
+      })
+    })
   })
 
   // ─── suggest_plan_adjustment ──────────────────────────────────────────────
@@ -431,6 +513,42 @@ describe('agent/tools - executeToolCall', () => {
       expect(result).toHaveProperty('gap')
       expect(result).toHaveProperty('saved')
       expect(typeof result.saved).toBe('boolean')
+    })
+
+    it('rejects invalid date input', async () => {
+      await expect(invoke('suggest_plan_adjustment', { date: 'not-a-date' })).rejects.toThrow('date')
+    })
+
+    it('saves a supplement suggestion for an under-target lunch', async () => {
+      await seedPlanGapFixture()
+      seedDietLog('2024-06-15', 400)
+
+      const result = (await invoke('suggest_plan_adjustment', {
+        date: '2024-06-15',
+        mealType: 'lunch',
+      })) as Record<string, unknown>
+      const suggestion = result.suggestion as Record<string, unknown>
+      const savedAdjustment = result.savedAdjustment as Record<string, unknown>
+
+      expect(result).toMatchObject({
+        date: '2024-06-15',
+        mealType: 'lunch',
+        saved: true,
+      })
+      expect(suggestion).toMatchObject({
+        ruleId: 'after_meal_plan_gap',
+        mealType: 'lunch',
+        plannedCalories: 800,
+        actualCalories: 400,
+        deltaCalories: 400,
+        suggestionType: 'supplement',
+      })
+      expect(savedAdjustment).toMatchObject({
+        mealType: 'lunch',
+        suggestionType: 'supplement',
+        generatedBy: 'agent',
+      })
+      expect(savedAdjustment.id).toBeTypeOf('number')
     })
   })
 
@@ -447,6 +565,33 @@ describe('agent/tools - executeToolCall', () => {
 
     it('rejects when adjustmentId is not an integer', async () => {
       await expect(invoke('record_adjustment_response', { adjustmentId: 'abc', response: 'accepted' })).rejects.toThrow()
+    })
+
+    it('persists valid feedback for an adjustment', async () => {
+      const adjustment = await saveDailyPlanAdjustment({
+        date: '2024-06-15',
+        ruleId: 'after_meal_plan_gap',
+        mealType: 'lunch',
+        plannedCalories: 800,
+        actualCalories: 1200,
+        deltaCalories: -400,
+        suggestedCalories: 320,
+        suggestionType: 'reduce',
+        suggestionText: 'Keep the next meal lighter without skipping it.',
+        generatedBy: 'agent',
+      })
+
+      const result = (await invoke('record_adjustment_response', {
+        adjustmentId: adjustment.id,
+        response: 'dismissed',
+      })) as Record<string, unknown>
+      const updatedAdjustment = result.adjustment as Record<string, unknown>
+
+      expect(result).toHaveProperty('success', true)
+      expect(updatedAdjustment).toMatchObject({
+        id: adjustment.id,
+        userResponse: 'dismissed',
+      })
     })
   })
 
@@ -475,6 +620,40 @@ describe('agent/tools - executeToolCall', () => {
       const result = (await invoke('update_reminder_preferences', { quietStartHour: 25 })) as Record<string, unknown>
       const reminders = result.reminders as Record<string, unknown>
       expect(reminders.quietStartHour).toBeLessThanOrEqual(23)
+    })
+
+    it('snoozes meal reminder rules for the rest of today without disabling settings', async () => {
+      vi.useFakeTimers({
+        now: new Date('2024-06-15T10:00:00Z'),
+        toFake: ['Date'],
+      })
+
+      const result = (await invoke('update_reminder_preferences', {
+        disableMealRemindersToday: true,
+      })) as Record<string, unknown>
+      const reminders = result.reminders as Record<string, unknown>
+      const snoozedRules = result.snoozedRules as Array<Record<string, unknown>>
+
+      expect(result).toHaveProperty('success', true)
+      expect(reminders.mealReminders).toBe(true)
+      expect(snoozedRules).toHaveLength(3)
+      expect(snoozedRules.map((event) => event.ruleId)).toEqual([
+        'coaching_breakfast_reminder',
+        'coaching_lunch_reminder',
+        'coaching_dinner_reminder',
+      ])
+      expect(snoozedRules.every((event) => event.userResponse === 'snoozed')).toBe(true)
+      expect(snoozedRules.every((event) => typeof event.cooldownUntil === 'string')).toBe(true)
+
+      const events = await getRecentProactiveEvents(3)
+      expect(events.map((event) => event.ruleId).sort()).toEqual([
+        'coaching_breakfast_reminder',
+        'coaching_dinner_reminder',
+        'coaching_lunch_reminder',
+      ].sort())
+      expect(events.every((event) => event.delivered === false)).toBe(true)
+      expect(events.every((event) => event.userResponse === 'snoozed')).toBe(true)
+      expect(events.every((event) => event.payload.reason === 'user_disabled_meal_reminders_today')).toBe(true)
     })
   })
 

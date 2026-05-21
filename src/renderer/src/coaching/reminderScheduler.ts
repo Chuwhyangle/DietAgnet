@@ -21,6 +21,7 @@ const FOREGROUND_TICK_INTERVAL_MS = 10 * 60 * 1000 // 10 minutes
 const ESCALATION_THRESHOLD_MINUTES = 90
 const DISMISS_PAUSE_THRESHOLD = 3
 const DISMISS_PAUSE_HOURS = 24
+const AGENT_CHECK_RULE_ID = 'agent_check'
 const WEEKLY_CHECKIN_RULE_ID = 'coaching_weekly_checkin'
 const WEEKLY_CHECKIN_MIN_LOGGED_DAYS = 3
 
@@ -56,6 +57,40 @@ const MEAL_REMINDER_CONFIGS: MealReminderConfig[] = [
   },
 ]
 
+type SchedulerReason = SchedulerTickResult['reason']
+
+type EvaluatedRule = SchedulerTickResult['evaluatedRules'][number]
+
+interface RuleCoolingState {
+  active: boolean
+  cooldownUntil?: string
+}
+
+interface RuleDismissPauseState {
+  active: boolean
+  pauseUntil?: string
+}
+
+interface BuildResultParams {
+  now: dayjs.Dayjs
+  tickId: string
+  ruleId: string
+  reason: SchedulerReason
+  message: string
+  fired?: ProactiveEvent | null
+  checkEvent?: ProactiveEvent | null
+  escalated?: boolean
+  quietHoursActive?: boolean
+  cooldownActive?: boolean
+  isAlreadyLogged?: boolean
+  isDismissPaused?: boolean
+  dismissCount?: number
+  mealType?: MealType
+  cooldownUntil?: string
+  pauseUntil?: string
+  evaluatedRules: EvaluatedRule[]
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -66,44 +101,59 @@ function hasMealLogged(date: string, mealType: MealType): boolean {
   return Boolean(meal && meal.items.length > 0)
 }
 
-async function isRuleCoolingDown(ruleId: string, now: dayjs.Dayjs): Promise<boolean> {
+async function getRuleCoolingState(ruleId: string, now: dayjs.Dayjs): Promise<RuleCoolingState> {
   const latestEvent = await getLatestProactiveEventForRule(ruleId)
   if (!latestEvent) {
-    return false
+    return { active: false }
   }
 
   if (latestEvent.cooldownUntil && dayjs(latestEvent.cooldownUntil).isAfter(now)) {
-    return true
+    return {
+      active: true,
+      cooldownUntil: latestEvent.cooldownUntil,
+    }
   }
 
   // Also respect the settings cooldown
   const settings = getSettings()
   const cooldownHours = settings.reminders.cooldownHours
-  return dayjs(latestEvent.firedAt).add(cooldownHours, 'hour').isAfter(now)
+  const cooldownUntil = dayjs(latestEvent.firedAt).add(cooldownHours, 'hour')
+  return cooldownUntil.isAfter(now)
+    ? {
+      active: true,
+      cooldownUntil: cooldownUntil.toISOString(),
+    }
+    : { active: false }
 }
 
-async function isRulePausedByDismissals(ruleId: string, now: dayjs.Dayjs): Promise<boolean> {
+async function getRuleDismissPauseState(ruleId: string, now: dayjs.Dayjs): Promise<RuleDismissPauseState> {
   const recentEvents = await getRecentProactiveEventsForRule(ruleId, DISMISS_PAUSE_THRESHOLD)
 
   if (recentEvents.length < DISMISS_PAUSE_THRESHOLD) {
-    return false
+    return { active: false }
   }
 
   const allDismissed = recentEvents.every((event) => event.userResponse === 'dismissed')
   if (!allDismissed) {
-    return false
+    return { active: false }
   }
 
   // Pause for 24 hours from the most recent (third) dismissal
-  return dayjs(recentEvents[0].firedAt).add(DISMISS_PAUSE_HOURS, 'hour').isAfter(now)
+  const pauseUntil = dayjs(recentEvents[0].firedAt).add(DISMISS_PAUSE_HOURS, 'hour')
+  return pauseUntil.isAfter(now)
+    ? {
+      active: true,
+      pauseUntil: pauseUntil.toISOString(),
+    }
+    : { active: false }
 }
 
 async function canFireRule(ruleId: string, now: dayjs.Dayjs): Promise<boolean> {
-  if (await isRuleCoolingDown(ruleId, now)) {
+  if ((await getRuleCoolingState(ruleId, now)).active) {
     return false
   }
 
-  return !(await isRulePausedByDismissals(ruleId, now))
+  return !(await getRuleDismissPauseState(ruleId, now)).active
 }
 
 /**
@@ -120,6 +170,101 @@ async function getDismissCount(ruleId: string): Promise<number> {
     }
   }
   return count
+}
+
+function createTickId(now: dayjs.Dayjs): string {
+  return `tick-${now.valueOf()}-${Math.random().toString(16).slice(2, 8)}`
+}
+
+function buildTickResult(params: BuildResultParams): SchedulerTickResult {
+  const fired = params.fired ?? null
+  const quietHoursActive = params.quietHoursActive ?? false
+  const cooldownActive = params.cooldownActive ?? false
+  const escalated = params.escalated ?? false
+
+  return {
+    fired,
+    escalated,
+    quietHoursActive,
+    cooldownActive,
+    triggered: Boolean(fired),
+    delivered: Boolean(fired?.delivered),
+    tickId: params.tickId,
+    checkedAt: params.now.toISOString(),
+    ruleId: params.ruleId,
+    reason: params.reason,
+    message: params.message,
+    skipReason: fired ? undefined : params.reason,
+    mealType: params.mealType,
+    isQuiet: quietHoursActive,
+    isCoolingDown: cooldownActive,
+    isAlreadyLogged: params.isAlreadyLogged ?? false,
+    isDismissPaused: params.isDismissPaused ?? false,
+    isEscalated: escalated,
+    dismissCount: params.dismissCount ?? 0,
+    cooldownUntil: params.cooldownUntil,
+    pauseUntil: params.pauseUntil,
+    checkEvent: params.checkEvent ?? fired,
+    evaluatedRules: params.evaluatedRules,
+  }
+}
+
+async function persistSkippedAgentCheck(result: SchedulerTickResult): Promise<SchedulerTickResult> {
+  const event = await saveProactiveEvent({
+    ruleId: AGENT_CHECK_RULE_ID,
+    trigger: 'cron',
+    priority: 'low',
+    firedAt: result.checkedAt,
+    delivered: false,
+    message: result.message,
+    payload: {
+      sourceTickId: result.tickId,
+      checkedRuleId: result.ruleId,
+      reason: result.reason,
+      skipReason: result.skipReason,
+      quietHoursActive: result.quietHoursActive,
+      cooldownActive: result.cooldownActive,
+      alreadyLogged: result.isAlreadyLogged,
+      dismissPaused: result.isDismissPaused,
+      dismissCount: result.dismissCount,
+      escalated: result.isEscalated,
+      mealType: result.mealType,
+      cooldownUntil: result.cooldownUntil,
+      pauseUntil: result.pauseUntil,
+      evaluatedRules: result.evaluatedRules,
+    },
+  })
+
+  return {
+    ...result,
+    checkEvent: event,
+  }
+}
+
+function getSkippedResultMessage(reason: SchedulerReason, mealType?: MealType): string {
+  const mealLabel = mealType ? mealTypeLabels[mealType] : '当前餐次'
+  switch (reason) {
+    case 'quiet_hours':
+      return '当前处于静音时段，Agent 本次只记录判断，不打扰用户。'
+    case 'reminders_disabled':
+      return '主动提醒总开关已关闭，Agent 不会发出饮食提醒。'
+    case 'meal_reminders_disabled':
+      return '餐次未记录提醒已关闭，Agent 不会提醒记录三餐。'
+    case 'before_window':
+      return '还没到需要检查三餐记录的时间窗口。'
+    case 'already_logged':
+      return `${mealLabel}已经有饮食记录，本次不提醒。`
+    case 'cooldown':
+      return `${mealLabel}提醒仍在冷却中，本次不重复打扰。`
+    case 'dismiss_pause':
+      return `${mealLabel}提醒已连续忽略 3 次，Agent 至少 24 小时内降低打扰。`
+    case 'weekly_checkin_fired':
+      return '本周复盘已经提醒过，本次不重复触发。'
+    case 'weekly_checkin_not_due':
+      return '本周记录天数还没达到复盘提醒条件。'
+    default:
+      return '没有符合触发条件的主动提醒。'
+  }
 }
 
 /**
@@ -202,114 +347,207 @@ export async function evaluateSchedulerTick(now?: dayjs.Dayjs): Promise<Schedule
   const currentTime = now ?? dayjs()
   const settings = getSettings()
   const reminderSettings = settings.reminders
+  const date = currentTime.format('YYYY-MM-DD')
+  const tickId = createTickId(currentTime)
+  const evaluatedRules: EvaluatedRule[] = []
 
   // Check quiet hours first — NEVER fire during quiet hours
   if (isReminderQuietHours(reminderSettings, currentTime)) {
-    return {
-      fired: null,
-      escalated: false,
+    return persistSkippedAgentCheck(buildTickResult({
+      now: currentTime,
+      tickId,
+      ruleId: AGENT_CHECK_RULE_ID,
+      reason: 'quiet_hours',
+      message: getSkippedResultMessage('quiet_hours'),
       quietHoursActive: true,
-      cooldownActive: false,
-    }
+      evaluatedRules,
+    }))
   }
 
   // Check if reminders are globally disabled
-  if (!reminderSettings.enabled || !reminderSettings.mealReminders) {
-    return {
-      fired: null,
-      escalated: false,
-      quietHoursActive: false,
-      cooldownActive: false,
-    }
+  if (!reminderSettings.enabled) {
+    return persistSkippedAgentCheck(buildTickResult({
+      now: currentTime,
+      tickId,
+      ruleId: AGENT_CHECK_RULE_ID,
+      reason: 'reminders_disabled',
+      message: getSkippedResultMessage('reminders_disabled'),
+      evaluatedRules,
+    }))
   }
 
-  const date = currentTime.format('YYYY-MM-DD')
-  const tickId = `tick-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+  if (!reminderSettings.mealReminders) {
+    return persistSkippedAgentCheck(buildTickResult({
+      now: currentTime,
+      tickId,
+      ruleId: AGENT_CHECK_RULE_ID,
+      reason: 'meal_reminders_disabled',
+      message: getSkippedResultMessage('meal_reminders_disabled'),
+      evaluatedRules,
+    }))
+  }
+
+  let terminalSkip: {
+    ruleId: string
+    reason: SchedulerReason
+    mealType?: MealType
+    isAlreadyLogged?: boolean
+    isCoolingDown?: boolean
+    isDismissPaused?: boolean
+    dismissCount?: number
+    cooldownUntil?: string
+    pauseUntil?: string
+  } = {
+    ruleId: AGENT_CHECK_RULE_ID,
+    reason: 'before_window',
+  }
 
   // --- Meal Reminders with Escalation ---
   for (const config of MEAL_REMINDER_CONFIGS) {
-    // Only check rules whose time window has passed
-    if (currentTime.hour() < config.afterHour) {
+    const due = currentTime.hour() >= config.afterHour
+    const alreadyLogged = due ? hasMealLogged(date, config.mealType) : false
+    const evaluatedRule: EvaluatedRule = {
+      ruleId: config.ruleId,
+      mealType: config.mealType,
+      due,
+      alreadyLogged,
+      coolingDown: false,
+      dismissPaused: false,
+      dismissCount: 0,
+    }
+
+    if (!due) {
+      evaluatedRule.skipReason = 'before_window'
+      evaluatedRules.push(evaluatedRule)
       continue
     }
 
-    // Skip if meal is already logged
-    if (hasMealLogged(date, config.mealType)) {
-      continue
-    }
-
-    // Check escalation first
-    const escalate = await shouldEscalate(config.ruleId, config.mealType, date, currentTime)
-    if (escalate) {
-      // Check if we can fire (cooldown/dismiss-pause still apply)
-      if (!(await canFireRule(config.ruleId, currentTime))) {
-        return {
-          fired: null,
-          escalated: false,
-          quietHoursActive: false,
-          cooldownActive: true,
-        }
-      }
-
-      const dismissCount = await getDismissCount(config.ruleId)
-      const event = await saveProactiveEvent({
+    if (alreadyLogged) {
+      evaluatedRule.skipReason = 'already_logged'
+      evaluatedRules.push(evaluatedRule)
+      terminalSkip = {
         ruleId: config.ruleId,
-        trigger: 'cron',
-        priority: 'medium', // escalated from low
-        delivered: true,
-        message: config.message,
-        payload: {
-          sourceTickId: tickId,
-          escalationLevel: 1,
-          dismissCount,
-          quietHoursActive: false,
-          date,
-          mealType: config.mealType,
-          mealLabel: mealTypeLabels[config.mealType],
-        },
-      })
-
-      return {
-        fired: event,
-        escalated: true,
-        quietHoursActive: false,
-        cooldownActive: false,
+        reason: 'already_logged',
+        mealType: config.mealType,
+        isAlreadyLogged: true,
       }
-    }
-
-    // Normal (non-escalated) firing
-    if (!(await canFireRule(config.ruleId, currentTime))) {
       continue
     }
 
     const dismissCount = await getDismissCount(config.ruleId)
+    const coolingState = await getRuleCoolingState(config.ruleId, currentTime)
+    const dismissPauseState = await getRuleDismissPauseState(config.ruleId, currentTime)
+
+    evaluatedRule.dismissCount = dismissCount
+    evaluatedRule.coolingDown = coolingState.active
+    evaluatedRule.dismissPaused = dismissPauseState.active
+    evaluatedRule.cooldownUntil = coolingState.cooldownUntil
+    evaluatedRule.pauseUntil = dismissPauseState.pauseUntil
+
+    const escalate = await shouldEscalate(config.ruleId, config.mealType, date, currentTime)
+
+    if (coolingState.active) {
+      evaluatedRule.skipReason = 'cooldown'
+      evaluatedRules.push(evaluatedRule)
+      terminalSkip = {
+        ruleId: config.ruleId,
+        reason: 'cooldown',
+        mealType: config.mealType,
+        isCoolingDown: true,
+        dismissCount,
+        cooldownUntil: coolingState.cooldownUntil,
+      }
+      continue
+    }
+
+    if (dismissPauseState.active) {
+      evaluatedRule.skipReason = 'dismiss_pause'
+      evaluatedRules.push(evaluatedRule)
+      terminalSkip = {
+        ruleId: config.ruleId,
+        reason: 'dismiss_pause',
+        mealType: config.mealType,
+        isDismissPaused: true,
+        dismissCount,
+        pauseUntil: dismissPauseState.pauseUntil,
+      }
+      continue
+    }
+
     const event = await saveProactiveEvent({
       ruleId: config.ruleId,
       trigger: 'cron',
-      priority: 'low',
+      priority: escalate ? 'medium' : 'low',
+      firedAt: currentTime.toISOString(),
       delivered: true,
       message: config.message,
       payload: {
         sourceTickId: tickId,
-        escalationLevel: 0,
+        ruleId: config.ruleId,
+        reason: escalate ? 'escalated' : 'fired',
+        escalationLevel: escalate ? 1 : 0,
         dismissCount,
         quietHoursActive: false,
+        cooldownActive: false,
+        alreadyLogged: false,
+        dismissPaused: false,
         date,
         mealType: config.mealType,
         mealLabel: mealTypeLabels[config.mealType],
+        evaluatedRules: [...evaluatedRules, evaluatedRule],
       },
     })
+    evaluatedRules.push(evaluatedRule)
 
-    return {
+    return buildTickResult({
+      now: currentTime,
+      tickId,
       fired: event,
-      escalated: false,
+      escalated: escalate,
+      ruleId: config.ruleId,
+      reason: escalate ? 'escalated' : 'fired',
+      message: config.message,
+      mealType: config.mealType,
+      dismissCount,
       quietHoursActive: false,
       cooldownActive: false,
-    }
+      evaluatedRules,
+    })
   }
 
   // --- Weekly Check-In ---
-  if (await shouldFireWeeklyCheckin(currentTime)) {
+  const weeklyAlreadyFired = await hasWeeklyCheckinFiredThisWeek(currentTime)
+  const weeklyDismissCount = await getDismissCount(WEEKLY_CHECKIN_RULE_ID)
+  const weeklyCoolingState = await getRuleCoolingState(WEEKLY_CHECKIN_RULE_ID, currentTime)
+  const weeklyDismissPauseState = await getRuleDismissPauseState(WEEKLY_CHECKIN_RULE_ID, currentTime)
+  const loggedDaysThisWeek = getLoggedDaysThisWeek(currentTime)
+  const weeklyRule: EvaluatedRule = {
+    ruleId: WEEKLY_CHECKIN_RULE_ID,
+    due: loggedDaysThisWeek >= WEEKLY_CHECKIN_MIN_LOGGED_DAYS,
+    alreadyLogged: false,
+    coolingDown: weeklyCoolingState.active,
+    dismissPaused: weeklyDismissPauseState.active,
+    dismissCount: weeklyDismissCount,
+    cooldownUntil: weeklyCoolingState.cooldownUntil,
+    pauseUntil: weeklyDismissPauseState.pauseUntil,
+  }
+
+  if (weeklyAlreadyFired) {
+    weeklyRule.skipReason = 'weekly_checkin_fired'
+  } else if (weeklyCoolingState.active) {
+    weeklyRule.skipReason = 'cooldown'
+  } else if (weeklyDismissPauseState.active) {
+    weeklyRule.skipReason = 'dismiss_pause'
+  } else if (loggedDaysThisWeek < WEEKLY_CHECKIN_MIN_LOGGED_DAYS) {
+    weeklyRule.skipReason = 'weekly_checkin_not_due'
+  }
+
+  evaluatedRules.push(weeklyRule)
+
+  if (!weeklyAlreadyFired &&
+    !weeklyCoolingState.active &&
+    !weeklyDismissPauseState.active &&
+    loggedDaysThisWeek >= WEEKLY_CHECKIN_MIN_LOGGED_DAYS) {
     const loggedDays = getLoggedDaysThisWeek(currentTime)
     const weekStart = currentTime.startOf('isoWeek').format('YYYY-MM-DD')
     const weekEnd = currentTime.endOf('isoWeek').format('YYYY-MM-DD')
@@ -319,34 +557,65 @@ export async function evaluateSchedulerTick(now?: dayjs.Dayjs): Promise<Schedule
       ruleId: WEEKLY_CHECKIN_RULE_ID,
       trigger: 'cron',
       priority: 'low',
+      firedAt: currentTime.toISOString(),
       delivered: true,
       message,
       payload: {
         sourceTickId: tickId,
+        ruleId: WEEKLY_CHECKIN_RULE_ID,
+        reason: 'fired',
         escalationLevel: 0,
         dismissCount: 0,
         quietHoursActive: false,
+        cooldownActive: false,
         weekStart,
         weekEnd,
         loggedDays,
+        evaluatedRules,
       },
     })
 
-    return {
+    return buildTickResult({
+      now: currentTime,
+      tickId,
       fired: event,
+      ruleId: WEEKLY_CHECKIN_RULE_ID,
+      reason: 'fired',
+      message,
       escalated: false,
       quietHoursActive: false,
       cooldownActive: false,
+      evaluatedRules,
+    })
+  }
+
+  if (terminalSkip.reason === 'before_window' && weeklyRule.skipReason) {
+    terminalSkip = {
+      ruleId: WEEKLY_CHECKIN_RULE_ID,
+      reason: weeklyRule.skipReason as SchedulerReason,
+      isCoolingDown: weeklyRule.coolingDown,
+      isDismissPaused: weeklyRule.dismissPaused,
+      dismissCount: weeklyRule.dismissCount,
+      cooldownUntil: weeklyRule.cooldownUntil,
+      pauseUntil: weeklyRule.pauseUntil,
     }
   }
 
-  // Nothing to fire
-  return {
-    fired: null,
-    escalated: false,
-    quietHoursActive: false,
-    cooldownActive: false,
-  }
+  return persistSkippedAgentCheck(buildTickResult({
+    now: currentTime,
+    tickId,
+    ruleId: terminalSkip.ruleId,
+    reason: terminalSkip.reason,
+    message: getSkippedResultMessage(terminalSkip.reason, terminalSkip.mealType),
+    mealType: terminalSkip.mealType,
+    isAlreadyLogged: terminalSkip.isAlreadyLogged,
+    cooldownActive: terminalSkip.isCoolingDown,
+    isDismissPaused: terminalSkip.isDismissPaused,
+    dismissCount: terminalSkip.dismissCount,
+    cooldownUntil: terminalSkip.cooldownUntil,
+    pauseUntil: terminalSkip.pauseUntil,
+    evaluatedRules,
+  }))
 }
 
 /**

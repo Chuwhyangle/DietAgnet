@@ -9,13 +9,17 @@ import {
 } from '../stores/dietLog'
 import { getSettings } from '../stores/settings'
 import {
+  getCurrentPlanningProfile,
   getLatestPersonalDietPlan,
   getConfirmedPlannedMealsForDate,
+  getUserMemories,
   saveDailyPlanAdjustment,
   type DailyPlanAdjustment,
   type DailyPlanSuggestionType,
   type PersonalDietPlan,
+  type PlanningProfile,
   type PlannedMeal,
+  type UserMemory,
 } from '../stores/planning'
 
 export interface MealCalorieTarget {
@@ -41,7 +45,10 @@ export interface DailyPlanGap {
     hasPlannedMeal: boolean
   }>
   latestPlan: PersonalDietPlan | null
+  planningProfile: PlanningProfile | null
   confirmedPlannedMeals: PlannedMeal[]
+  relevantMemories: UserMemory[]
+  safetyContext: DynamicPlanSafetyContext
 }
 
 export interface DynamicPlanSuggestion {
@@ -58,8 +65,22 @@ export interface DynamicPlanSuggestion {
   recommendedMealWindow?: string
 }
 
+export interface DynamicPlanSafetyContext {
+  avoidDairy: boolean
+  conservative: boolean
+  notes: string[]
+}
+
 const SIGNIFICANT_PERCENT = 0.25
 const SIGNIFICANT_CALORIES = 200
+const DAIRY_AVOIDANCE_RE = /(乳糖不耐|不喝牛奶|不能喝牛奶|不吃牛奶|不要牛奶|牛奶不行|奶制品不耐|乳制品不耐|lactose|milk)/i
+const HEALTH_CAUTION_RE = /(医生|医嘱|疾病|慢病|糖尿病|肾病|胃炎|药物|怀孕|孕期|哺乳|进食障碍|厌食|暴食|低体重|偏瘦|未成年|儿童|青少年)/i
+const EXTREME_LANGUAGE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/跳过下一餐/g, '下一餐做温和调整'],
+  [/完全不吃/g, '适量减少'],
+  [/极端节食/g, '过度限制'],
+  [/不吃饭/g, '过度补偿'],
+]
 
 function roundToNearestTen(value: number): number {
   return Math.round(value / 10) * 10
@@ -96,6 +117,65 @@ function sumMealCalories(log: DietLog | null, mealType: MealType): number {
   return meal.items.reduce((sum, item) => sum + item.calories, 0)
 }
 
+function getProfileBmi(profile: PlanningProfile | null): number | null {
+  if (!profile?.heightCm || !profile.weightKg || profile.heightCm <= 0 || profile.weightKg <= 0) {
+    return null
+  }
+
+  return profile.weightKg / ((profile.heightCm / 100) ** 2)
+}
+
+function buildSafetyContext(profile: PlanningProfile | null, memories: UserMemory[]): DynamicPlanSafetyContext {
+  const memoryText = memories.map((memory) => `${memory.content} ${memory.tags.join(' ')}`).join('\n')
+  const profileText = [
+    profile?.dietPreference,
+    profile?.allergies,
+    profile?.medicalNotes,
+    profile?.scheduleNotes,
+  ].filter(Boolean).join('\n')
+  const joinedText = `${memoryText}\n${profileText}`
+  const bmi = getProfileBmi(profile)
+  const notes: string[] = []
+
+  const avoidDairy = DAIRY_AVOIDANCE_RE.test(joinedText)
+  if (avoidDairy) {
+    notes.push('已避开牛奶、酸奶等奶类补充选项。')
+  }
+
+  const ageCaution = typeof profile?.age === 'number' && profile.age < 18
+  const bmiLow = bmi !== null && bmi < 18.5
+  const healthCaution = HEALTH_CAUTION_RE.test(joinedText)
+  if (ageCaution || bmiLow || healthCaution) {
+    notes.push('存在年龄、体重或健康备注相关风险，建议只做温和调整，并优先遵循医生或营养师意见。')
+  }
+
+  return {
+    avoidDairy,
+    conservative: ageCaution || bmiLow || healthCaution,
+    notes,
+  }
+}
+
+function ensureSafetyText(text: string, safetyContext: DynamicPlanSafetyContext): string {
+  let safeText = text
+  for (const [pattern, replacement] of EXTREME_LANGUAGE_REPLACEMENTS) {
+    safeText = safeText.replace(pattern, replacement)
+  }
+
+  const extraNotes = [
+    safetyContext.avoidDairy ? '我会避开牛奶、酸奶等奶类选项。' : undefined,
+    safetyContext.conservative
+      ? '如果涉及未成年人、BMI 偏低、孕期/哺乳期、疾病、药物或医生建议，请先按专业意见执行。'
+      : undefined,
+  ].filter(Boolean)
+
+  if (extraNotes.length === 0) {
+    return safeText
+  }
+
+  return `${safeText} ${extraNotes.join(' ')}`
+}
+
 function getRecommendedMealWindow(mealType?: MealType): string | undefined {
   switch (mealType) {
     case 'breakfast':
@@ -118,11 +198,18 @@ function buildSupplementText(params: {
   deltaCalories: number
   suggestedCalories: number
   recommendedMealWindow?: string
+  safetyContext: DynamicPlanSafetyContext
 }): string {
   const mealLabel = params.mealType ? mealTypeLabels[params.mealType] : '今天'
   const windowText = params.recommendedMealWindow ? `，可以放在${params.recommendedMealWindow}` : ''
+  const foodOptions = params.safetyContext.avoidDairy
+    ? '鸡蛋、豆制品、瘦肉、鱼虾或少量主食'
+    : '鸡蛋、无糖酸奶、豆制品、瘦肉或少量主食'
 
-  return `${mealLabel}比计划少了大约 ${params.deltaCalories} kcal。建议补充 ${params.suggestedCalories} kcal 左右${windowText}，优先选鸡蛋、酸奶、豆制品、瘦肉或少量主食，不用把所有缺口都堆到一餐里。`
+  return ensureSafetyText(
+    `${mealLabel}比计划少了大约 ${params.deltaCalories} kcal。建议补充 ${params.suggestedCalories} kcal 左右${windowText}，优先选${foodOptions}，不用把所有缺口都堆到一餐里。`,
+    params.safetyContext,
+  )
 }
 
 function buildReduceText(params: {
@@ -132,25 +219,39 @@ function buildReduceText(params: {
   deltaCalories: number
   suggestedCalories: number
   recommendedMealWindow?: string
+  safetyContext: DynamicPlanSafetyContext
 }): string {
   const mealLabel = params.mealType ? mealTypeLabels[params.mealType] : '今天'
   const windowText = params.recommendedMealWindow ? `，${params.recommendedMealWindow}可以清淡一点` : ''
 
-  return `${mealLabel}比计划多了大约 ${Math.abs(params.deltaCalories)} kcal${windowText}。下一餐优先选清淡蛋白和蔬菜，主食少量就好，不需要用不吃饭来补偿。`
+  return ensureSafetyText(
+    `${mealLabel}比计划多了大约 ${Math.abs(params.deltaCalories)} kcal${windowText}。下一餐优先选清淡蛋白和蔬菜，主食少量就好，不需要用过度补偿来抵消。`,
+    params.safetyContext,
+  )
 }
 
 function buildMaintainText(params: {
   actualCalories: number
   plannedCalories: number
   remainingCalories: number
+  safetyContext: DynamicPlanSafetyContext
 }): string {
-  return `今天目前摄入 ${params.actualCalories} kcal，距离目标还剩约 ${params.remainingCalories} kcal。节奏整体还稳，下一餐按正常计划吃就好。`
+  return ensureSafetyText(
+    `今天目前摄入 ${params.actualCalories} kcal，距离目标还剩约 ${params.remainingCalories} kcal。节奏整体还稳，下一餐按正常计划吃就好。`,
+    params.safetyContext,
+  )
 }
 
 export async function getDailyPlanGap(date = dayjs().format('YYYY-MM-DD')): Promise<DailyPlanGap | null> {
-  const [latestPlan, confirmedPlannedMeals] = await Promise.all([
+  const [latestPlan, confirmedPlannedMeals, currentProfile, relevantMemories] = await Promise.all([
     getLatestPersonalDietPlan(),
     getConfirmedPlannedMealsForDate(date),
+    getCurrentPlanningProfile(),
+    getUserMemories({
+      status: 'active',
+      types: ['preference', 'allergy', 'avoidance', 'habit', 'schedule', 'health_note'],
+      limit: 50,
+    }),
   ])
   const settings = getSettings()
   const dailyTarget = latestPlan?.dailyCalorieTarget ?? settings.calorieGoal
@@ -205,7 +306,10 @@ export async function getDailyPlanGap(date = dayjs().format('YYYY-MM-DD')): Prom
     mealTargets,
     mealGaps,
     latestPlan,
+    planningProfile: currentProfile ?? latestPlan?.profileSnapshot ?? null,
     confirmedPlannedMeals,
+    relevantMemories,
+    safetyContext: buildSafetyContext(currentProfile ?? latestPlan?.profileSnapshot ?? null, relevantMemories),
   }
 }
 
@@ -240,6 +344,7 @@ export function buildDynamicPlanSuggestion(
           ...selectedMealGap,
           suggestedCalories,
           recommendedMealWindow,
+          safetyContext: gap.safetyContext,
         }),
       }
     }
@@ -261,6 +366,7 @@ export function buildDynamicPlanSuggestion(
           ...selectedMealGap,
           suggestedCalories,
           recommendedMealWindow,
+          safetyContext: gap.safetyContext,
         }),
       }
     }
@@ -289,6 +395,7 @@ export function buildDynamicPlanSuggestion(
         deltaCalories: dailyDelta,
         suggestedCalories,
         recommendedMealWindow: '下一餐',
+        safetyContext: gap.safetyContext,
       }),
     }
   }
@@ -311,6 +418,7 @@ export function buildDynamicPlanSuggestion(
         deltaCalories: dailyDelta,
         suggestedCalories,
         recommendedMealWindow: '下一餐或明天',
+        safetyContext: gap.safetyContext,
       }),
     }
   }
@@ -329,6 +437,7 @@ export function buildDynamicPlanSuggestion(
       actualCalories: gap.actualCalories,
       plannedCalories: gap.dailyTarget,
       remainingCalories: gap.remainingCalories,
+      safetyContext: gap.safetyContext,
     }),
   }
 }
@@ -358,8 +467,7 @@ export async function evaluateDailyPlanAdjustment(params: {
   const suggestion = buildDynamicPlanSuggestion(gap, params.mealType)
   const shouldPersist = params.persist === true &&
     (params.generatedBy === 'agent' || (settings.reminders.enabled && settings.reminders.planAdjustmentReminders)) &&
-    suggestion !== null &&
-    suggestion.suggestionType !== 'maintain'
+    suggestion !== null
 
   if (!shouldPersist || !suggestion) {
     return {

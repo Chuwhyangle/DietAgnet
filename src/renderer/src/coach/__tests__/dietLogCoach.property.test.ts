@@ -58,6 +58,8 @@ vi.mock('../../stores/settings', () => ({
 vi.mock('../../stores/planning', () => ({
   getLatestPersonalDietPlan: vi.fn(() => Promise.resolve(null)),
   getConfirmedPlannedMealsForDate: vi.fn(() => Promise.resolve([])),
+  getCurrentPlanningProfile: vi.fn(() => Promise.resolve(null)),
+  getUserMemories: vi.fn(() => Promise.resolve([])),
   saveDailyPlanAdjustment: vi.fn(() => Promise.resolve({ id: 1 })),
 }))
 

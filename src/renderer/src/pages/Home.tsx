@@ -13,6 +13,7 @@ import {
 import PlanBuilder from '../components/PlanBuilder'
 import PlanVersionAudit from '../components/PlanVersionAudit'
 import OneTapLogger from '../components/OneTapLogger'
+import AgentActivity from '../components/AgentActivity'
 import { recipes } from '../data/recipes'
 import { getTodayLog, summarizeDietLog, type DietLog } from '../stores/dietLog'
 import {
@@ -448,6 +449,8 @@ function HomePage(): JSX.Element {
           </Card>
         </Col>
       </Row>
+
+      <AgentActivity />
 
       <div style={{ marginTop: 24 }}>
         <PlanVersionAudit plans={recentPlans} />

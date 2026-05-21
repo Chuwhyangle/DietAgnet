@@ -121,6 +121,17 @@ describe('evaluateSchedulerTick', () => {
 
     expect(result.fired).toBeNull()
     expect(result.quietHoursActive).toBe(true)
+    expect(result.triggered).toBe(false)
+    expect(result.delivered).toBe(false)
+    expect(result.reason).toBe('quiet_hours')
+    expect(result.ruleId).toBe('agent_check')
+    expect(result.isQuiet).toBe(true)
+    expect(result.checkEvent?.delivered).toBe(false)
+    expect(result.checkEvent?.payload).toMatchObject({
+      reason: 'quiet_hours',
+      skipReason: 'quiet_hours',
+      quietHoursActive: true,
+    })
     expect(result.escalated).toBe(false)
   })
 
@@ -160,6 +171,20 @@ describe('evaluateSchedulerTick', () => {
 
     // Should not fire breakfast, might fire lunch if after 13:00
     expect(result.fired?.payload?.mealType).not.toBe('breakfast')
+    expect(result.fired).toBeNull()
+    expect(result.reason).toBe('already_logged')
+    expect(result.ruleId).toBe('coaching_breakfast_reminder')
+    expect(result.mealType).toBe('breakfast')
+    expect(result.isAlreadyLogged).toBe(true)
+    expect(result.checkEvent?.ruleId).toBe('agent_check')
+    expect(result.checkEvent?.delivered).toBe(false)
+    expect(result.checkEvent?.payload).toMatchObject({
+      checkedRuleId: 'coaching_breakfast_reminder',
+      reason: 'already_logged',
+      skipReason: 'already_logged',
+      alreadyLogged: true,
+      mealType: 'breakfast',
+    })
   })
 
   it('fires a lunch reminder after 13:00 when lunch is not logged', async () => {
@@ -260,6 +285,18 @@ describe('evaluateSchedulerTick', () => {
 
     // Breakfast rule is in cooldown, so it should skip to next rule or not fire
     expect(result.fired?.ruleId).not.toBe('coaching_breakfast_reminder')
+    expect(result.fired).toBeNull()
+    expect(result.reason).toBe('cooldown')
+    expect(result.ruleId).toBe('coaching_breakfast_reminder')
+    expect(result.isCoolingDown).toBe(true)
+    expect(result.cooldownUntil).toBeDefined()
+    expect(result.checkEvent?.payload).toMatchObject({
+      checkedRuleId: 'coaching_breakfast_reminder',
+      reason: 'cooldown',
+      skipReason: 'cooldown',
+      cooldownActive: true,
+      mealType: 'breakfast',
+    })
   })
 
   it('respects dismiss-pause — pauses rule after 3 consecutive dismissals', async () => {
@@ -285,6 +322,21 @@ describe('evaluateSchedulerTick', () => {
     const result = await evaluateSchedulerTick(now)
 
     expect(result.fired?.ruleId).not.toBe('coaching_breakfast_reminder')
+    expect(result.fired).toBeNull()
+    expect(result.reason).toBe('dismiss_pause')
+    expect(result.ruleId).toBe('coaching_breakfast_reminder')
+    expect(result.isDismissPaused).toBe(true)
+    expect(result.dismissCount).toBe(3)
+    expect(result.pauseUntil).toBeDefined()
+    expect(dayjs(result.pauseUntil).diff(now, 'hour')).toBeGreaterThanOrEqual(22)
+    expect(result.checkEvent?.payload).toMatchObject({
+      checkedRuleId: 'coaching_breakfast_reminder',
+      reason: 'dismiss_pause',
+      skipReason: 'dismiss_pause',
+      dismissPaused: true,
+      dismissCount: 3,
+      mealType: 'breakfast',
+    })
   })
 
   it('fires weekly check-in when user has logged ≥3 days this week', async () => {

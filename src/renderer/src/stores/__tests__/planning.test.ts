@@ -18,6 +18,7 @@ import {
   saveDailyPlanAdjustment,
   getLatestDailyPlanAdjustment,
   clearDailyPlanAdjustments,
+  updateDailyPlanAdjustmentResponse,
   saveProactiveEvent,
   getRecentProactiveEvents,
   saveUserMemory,
@@ -29,6 +30,7 @@ import {
   getPlannedMealsForDate,
   updatePlannedMealStatus,
   deletePlannedMeal,
+  planningDb,
 } from '../planning'
 import { resetPlanningDb } from '../../../../test/doubles/dexie'
 
@@ -129,6 +131,75 @@ describe('stores/planning', () => {
       expect(await getLatestDailyPlanAdjustment('2024-06-15')).not.toBeNull()
       expect(await clearDailyPlanAdjustments('2024-06-15')).toBe(1)
       expect(await getLatestDailyPlanAdjustment('2024-06-15')).toBeNull()
+    })
+
+    it('writes an audit entry when an adjustment is saved', async () => {
+      const saved = await saveDailyPlanAdjustment({
+        date: '2024-06-15',
+        ruleId: 'after_meal_plan_gap',
+        mealType: 'lunch',
+        plannedCalories: 800,
+        actualCalories: 400,
+        deltaCalories: 400,
+        suggestedCalories: 320,
+        suggestionType: 'supplement',
+        suggestionText: 'Add a gentle snack later today.',
+        generatedBy: 'agent',
+      })
+
+      const auditRows = await planningDb.coachingAuditLog.toArray()
+      expect(auditRows).toHaveLength(1)
+      expect(auditRows[0]).toMatchObject({
+        actor: 'agent',
+        action: 'daily_plan_adjustment.saved',
+      })
+      expect(auditRows[0].payload).toMatchObject({
+        adjustmentId: saved.id,
+        date: '2024-06-15',
+        ruleId: 'after_meal_plan_gap',
+        mealType: 'lunch',
+        suggestionType: 'supplement',
+        deltaCalories: 400,
+        generatedBy: 'agent',
+      })
+    })
+
+    it('persists user response and audits adjustment feedback', async () => {
+      const saved = await saveDailyPlanAdjustment({
+        date: '2024-06-15',
+        ruleId: 'after_meal_plan_gap',
+        mealType: 'dinner',
+        plannedCalories: 700,
+        actualCalories: 980,
+        deltaCalories: -280,
+        suggestedCalories: -220,
+        suggestionType: 'reduce',
+        suggestionText: 'Keep the next meal lighter without skipping it.',
+        generatedBy: 'local_rule',
+      })
+
+      const updated = await updateDailyPlanAdjustmentResponse(saved.id!, 'dismissed')
+
+      expect(updated?.userResponse).toBe('dismissed')
+      expect((await getLatestDailyPlanAdjustment('2024-06-15'))?.userResponse).toBe('dismissed')
+      const auditRows = await planningDb.coachingAuditLog.orderBy('timestamp').toArray()
+      expect(auditRows.map((row) => row.action)).toEqual([
+        'daily_plan_adjustment.saved',
+        'daily_plan_adjustment.response',
+      ])
+      expect(auditRows[1]).toMatchObject({
+        actor: 'user',
+        action: 'daily_plan_adjustment.response',
+      })
+      expect(auditRows[1].payload).toMatchObject({
+        adjustmentId: saved.id,
+        date: '2024-06-15',
+        ruleId: 'after_meal_plan_gap',
+        mealType: 'dinner',
+        suggestionType: 'reduce',
+        userResponse: 'dismissed',
+        deltaCalories: -280,
+      })
     })
   })
 

@@ -8,6 +8,11 @@ import Welcome from './components/Welcome'
 import { registerDietLogCoachReactions } from './coach/dietLogCoach'
 import { getSettings } from './stores/settings'
 import { startNotificationClickListener } from './coaching/notificationRouter'
+import {
+  evaluateSchedulerTick,
+  startBackgroundTickListener,
+  startForegroundScheduler,
+} from './coaching/reminderScheduler'
 
 const HomePage = lazy(() => import('./pages/Home'))
 const RecipesPage = lazy(() => import('./pages/Recipes'))
@@ -82,6 +87,20 @@ function App(): JSX.Element {
 
   useEffect(() => {
     return registerDietLogCoachReactions()
+  }, [])
+
+  useEffect(() => {
+    const stopForegroundScheduler = startForegroundScheduler()
+    const stopBackgroundTickListener = startBackgroundTickListener()
+
+    void evaluateSchedulerTick().catch((error) => {
+      console.error('[AgentCheck] Initial scheduler tick failed:', error)
+    })
+
+    return () => {
+      stopForegroundScheduler()
+      stopBackgroundTickListener()
+    }
   }, [])
 
   return (

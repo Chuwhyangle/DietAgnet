@@ -59,8 +59,10 @@ vi.mock('../stores/planning', () => ({
   getLatestActivePlanningSession: vi.fn().mockResolvedValue(null),
   getLatestPersonalDietPlan: vi.fn().mockResolvedValue(null),
   getRecentPersonalDietPlans: vi.fn().mockResolvedValue([]),
+  getRecentProactiveEvents: vi.fn().mockResolvedValue([]),
   getLatestDailyPlanAdjustment: vi.fn().mockResolvedValue(null),
   updateDailyPlanAdjustmentResponse: vi.fn().mockResolvedValue(null),
+  updateProactiveEventResponse: vi.fn().mockResolvedValue(null),
   getUserMemories: vi.fn().mockResolvedValue([]),
 }))
 
@@ -70,6 +72,8 @@ vi.mock('../stores/customFoods', () => ({
 }))
 
 vi.mock('../stores/events', () => ({
+  DIET_LOG_UPDATED_EVENT: 'diet-log-updated',
+  PLANNING_UPDATED_EVENT: 'planning-updated',
   MEMORY_UPDATED_EVENT: 'memory-updated',
   RECIPE_CALIBRATION_UPDATED_EVENT: 'recipe-calibration-updated',
   SETTINGS_UPDATED_EVENT: 'settings-updated',
@@ -96,6 +100,31 @@ vi.mock('../planning/engine', () => ({
 
 vi.mock('../planning/dynamicPlan', () => ({
   getDailyPlanGap: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('../coaching/reminderScheduler', () => ({
+  evaluateSchedulerTick: vi.fn().mockResolvedValue({
+    fired: null,
+    escalated: false,
+    quietHoursActive: false,
+    cooldownActive: false,
+    triggered: false,
+    delivered: false,
+    tickId: 'tick-test',
+    checkedAt: '2024-06-15T08:00:00.000Z',
+    ruleId: 'agent_check',
+    reason: 'before_window',
+    message: '还没到需要检查三餐记录的时间窗口。',
+    isQuiet: false,
+    isCoolingDown: false,
+    isAlreadyLogged: false,
+    isDismissPaused: false,
+    isEscalated: false,
+    dismissCount: 0,
+    evaluatedRules: [],
+  }),
+  startForegroundScheduler: vi.fn().mockReturnValue(() => {}),
+  startBackgroundTickListener: vi.fn().mockReturnValue(() => {}),
 }))
 
 // Mock export module
