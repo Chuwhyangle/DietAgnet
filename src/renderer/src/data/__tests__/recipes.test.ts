@@ -15,6 +15,9 @@ import { describe, it, expect } from 'vitest'
 
 import { recipes } from '../recipes'
 import { validateRecipes } from '../recipeValidation'
+import { localizeRecipe, recipeSearchText } from '../recipeTranslations.en'
+
+const hanPattern = /[\u3400-\u9fff]/
 
 describe('data/recipes (merged collection)', () => {
   it('contains the documented 130-recipe count (PRD §7.1)', () => {
@@ -46,5 +49,31 @@ describe('data/recipes (merged collection)', () => {
       console.error('recipes.ts validator violations sample:', sample)
     }
     expect(report.status).toBe('passed')
+  })
+
+  it('provides English recipe names, categories, ingredients, and matching step counts', () => {
+    for (const recipe of recipes) {
+      const localized = localizeRecipe(recipe, 'en')
+
+      expect(localized.name, recipe.id).not.toMatch(hanPattern)
+      expect(localized.category, recipe.id).not.toMatch(hanPattern)
+      expect(localized.ingredients, recipe.id).toHaveLength(recipe.ingredients.length)
+      expect(localized.steps, recipe.id).toHaveLength(recipe.steps.length)
+
+      for (const ingredient of localized.ingredients) {
+        expect(ingredient.name, `${recipe.id}:${ingredient.name}`).not.toMatch(hanPattern)
+      }
+    }
+  })
+
+  it('keeps English search text compatible with localized and original Chinese terms', () => {
+    const tomatoEgg = recipes.find((recipe) => recipe.id === 'tomato-egg')
+    expect(tomatoEgg).toBeDefined()
+
+    const searchText = recipeSearchText(tomatoEgg!, 'en')
+    expect(searchText).toContain('tomato scrambled eggs')
+    expect(searchText).toContain('番茄炒蛋')
+    expect(searchText).toContain('tomatoes')
+    expect(searchText).toContain('番茄')
   })
 })

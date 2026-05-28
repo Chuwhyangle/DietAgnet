@@ -7,7 +7,7 @@ import {
   type Meal,
   type MealType,
 } from '../stores/dietLog'
-import { getSettings } from '../stores/settings'
+import { getSettings, type AppLanguage } from '../stores/settings'
 import {
   getCurrentPlanningProfile,
   getLatestPersonalDietPlan,
@@ -82,6 +82,31 @@ const EXTREME_LANGUAGE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/不吃饭/g, '过度补偿'],
 ]
 
+const EN_EXTREME_LANGUAGE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/skip the next meal/gi, 'make a gentle adjustment at the next meal'],
+  [/eat nothing/gi, 'reduce moderately'],
+  [/extreme dieting/gi, 'over-restriction'],
+  [/not eat/gi, 'overcompensate'],
+]
+
+function resolveLanguage(language?: AppLanguage): AppLanguage {
+  return language ?? (getSettings().language === 'zh' ? 'zh' : 'en')
+}
+
+function getMealTypeLabel(mealType: MealType, language: AppLanguage): string {
+  if (language === 'zh') {
+    return mealTypeLabels[mealType]
+  }
+
+  const labels: Record<MealType, string> = {
+    breakfast: 'breakfast',
+    lunch: 'lunch',
+    dinner: 'dinner',
+    snack: 'snack',
+  }
+  return labels[mealType]
+}
+
 function roundToNearestTen(value: number): number {
   return Math.round(value / 10) * 10
 }
@@ -125,7 +150,11 @@ function getProfileBmi(profile: PlanningProfile | null): number | null {
   return profile.weightKg / ((profile.heightCm / 100) ** 2)
 }
 
-function buildSafetyContext(profile: PlanningProfile | null, memories: UserMemory[]): DynamicPlanSafetyContext {
+function buildSafetyContext(
+  profile: PlanningProfile | null,
+  memories: UserMemory[],
+  language: AppLanguage,
+): DynamicPlanSafetyContext {
   const memoryText = memories.map((memory) => `${memory.content} ${memory.tags.join(' ')}`).join('\n')
   const profileText = [
     profile?.dietPreference,
@@ -139,14 +168,18 @@ function buildSafetyContext(profile: PlanningProfile | null, memories: UserMemor
 
   const avoidDairy = DAIRY_AVOIDANCE_RE.test(joinedText)
   if (avoidDairy) {
-    notes.push('已避开牛奶、酸奶等奶类补充选项。')
+    notes.push(language === 'zh'
+      ? '已避开牛奶、酸奶等奶类补充选项。'
+      : 'Milk, yogurt, and other dairy options are avoided.')
   }
 
   const ageCaution = typeof profile?.age === 'number' && profile.age < 18
   const bmiLow = bmi !== null && bmi < 18.5
   const healthCaution = HEALTH_CAUTION_RE.test(joinedText)
   if (ageCaution || bmiLow || healthCaution) {
-    notes.push('存在年龄、体重或健康备注相关风险，建议只做温和调整，并优先遵循医生或营养师意见。')
+    notes.push(language === 'zh'
+      ? '存在年龄、体重或健康备注相关风险，建议只做温和调整，并优先遵循医生或营养师意见。'
+      : 'Age, body weight, or health notes suggest extra caution; keep adjustments gentle and follow medical or dietitian advice first.')
   }
 
   return {
@@ -156,16 +189,27 @@ function buildSafetyContext(profile: PlanningProfile | null, memories: UserMemor
   }
 }
 
-function ensureSafetyText(text: string, safetyContext: DynamicPlanSafetyContext): string {
+function ensureSafetyText(
+  text: string,
+  safetyContext: DynamicPlanSafetyContext,
+  language: AppLanguage,
+): string {
   let safeText = text
-  for (const [pattern, replacement] of EXTREME_LANGUAGE_REPLACEMENTS) {
+  const replacements = language === 'zh' ? EXTREME_LANGUAGE_REPLACEMENTS : EN_EXTREME_LANGUAGE_REPLACEMENTS
+  for (const [pattern, replacement] of replacements) {
     safeText = safeText.replace(pattern, replacement)
   }
 
   const extraNotes = [
-    safetyContext.avoidDairy ? '我会避开牛奶、酸奶等奶类选项。' : undefined,
+    safetyContext.avoidDairy
+      ? language === 'zh'
+        ? '我会避开牛奶、酸奶等奶类选项。'
+        : 'I will avoid milk, yogurt, and other dairy options.'
+      : undefined,
     safetyContext.conservative
-      ? '如果涉及未成年人、BMI 偏低、孕期/哺乳期、疾病、药物或医生建议，请先按专业意见执行。'
+      ? language === 'zh'
+        ? '如果涉及未成年人、BMI 偏低、孕期/哺乳期、疾病、药物或医生建议，请先按专业意见执行。'
+        : 'If minors, low BMI, pregnancy/breastfeeding, disease, medication, or medical advice are involved, follow professional guidance first.'
       : undefined,
   ].filter(Boolean)
 
@@ -176,7 +220,22 @@ function ensureSafetyText(text: string, safetyContext: DynamicPlanSafetyContext)
   return `${safeText} ${extraNotes.join(' ')}`
 }
 
-function getRecommendedMealWindow(mealType?: MealType): string | undefined {
+function getRecommendedMealWindow(mealType: MealType | undefined, language: AppLanguage): string | undefined {
+  if (language === 'en') {
+    switch (mealType) {
+      case 'breakfast':
+        return 'a morning snack or lunch'
+      case 'lunch':
+        return 'an afternoon snack or dinner'
+      case 'dinner':
+        return 'a light snack tonight or breakfast tomorrow'
+      case 'snack':
+        return 'the next meal'
+      default:
+        return undefined
+    }
+  }
+
   switch (mealType) {
     case 'breakfast':
       return '上午加餐或午餐'
@@ -199,8 +258,25 @@ function buildSupplementText(params: {
   suggestedCalories: number
   recommendedMealWindow?: string
   safetyContext: DynamicPlanSafetyContext
+  language: AppLanguage
 }): string {
-  const mealLabel = params.mealType ? mealTypeLabels[params.mealType] : '今天'
+  const mealLabel = params.mealType
+    ? getMealTypeLabel(params.mealType, params.language)
+    : params.language === 'zh' ? '今天' : 'today'
+
+  if (params.language === 'en') {
+    const windowText = params.recommendedMealWindow ? `, ideally around ${params.recommendedMealWindow}` : ''
+    const foodOptions = params.safetyContext.avoidDairy
+      ? 'eggs, soy foods, lean meat, seafood, or a small portion of staple carbs'
+      : 'eggs, unsweetened yogurt, soy foods, lean meat, or a small portion of staple carbs'
+
+    return ensureSafetyText(
+      `${mealLabel} is about ${params.deltaCalories} kcal below plan. Add around ${params.suggestedCalories} kcal${windowText}; prioritize ${foodOptions}, and do not force the whole gap into one meal.`,
+      params.safetyContext,
+      params.language,
+    )
+  }
+
   const windowText = params.recommendedMealWindow ? `，可以放在${params.recommendedMealWindow}` : ''
   const foodOptions = params.safetyContext.avoidDairy
     ? '鸡蛋、豆制品、瘦肉、鱼虾或少量主食'
@@ -209,6 +285,7 @@ function buildSupplementText(params: {
   return ensureSafetyText(
     `${mealLabel}比计划少了大约 ${params.deltaCalories} kcal。建议补充 ${params.suggestedCalories} kcal 左右${windowText}，优先选${foodOptions}，不用把所有缺口都堆到一餐里。`,
     params.safetyContext,
+    params.language,
   )
 }
 
@@ -220,13 +297,27 @@ function buildReduceText(params: {
   suggestedCalories: number
   recommendedMealWindow?: string
   safetyContext: DynamicPlanSafetyContext
+  language: AppLanguage
 }): string {
-  const mealLabel = params.mealType ? mealTypeLabels[params.mealType] : '今天'
+  const mealLabel = params.mealType
+    ? getMealTypeLabel(params.mealType, params.language)
+    : params.language === 'zh' ? '今天' : 'today'
+
+  if (params.language === 'en') {
+    const windowText = params.recommendedMealWindow ? `; keep ${params.recommendedMealWindow} lighter` : ''
+    return ensureSafetyText(
+      `${mealLabel} is about ${Math.abs(params.deltaCalories)} kcal above plan${windowText}. For the next meal, prioritize lean protein and vegetables with a modest portion of staple carbs; avoid overcompensating.`,
+      params.safetyContext,
+      params.language,
+    )
+  }
+
   const windowText = params.recommendedMealWindow ? `，${params.recommendedMealWindow}可以清淡一点` : ''
 
   return ensureSafetyText(
     `${mealLabel}比计划多了大约 ${Math.abs(params.deltaCalories)} kcal${windowText}。下一餐优先选清淡蛋白和蔬菜，主食少量就好，不需要用过度补偿来抵消。`,
     params.safetyContext,
+    params.language,
   )
 }
 
@@ -235,10 +326,20 @@ function buildMaintainText(params: {
   plannedCalories: number
   remainingCalories: number
   safetyContext: DynamicPlanSafetyContext
+  language: AppLanguage
 }): string {
+  if (params.language === 'en') {
+    return ensureSafetyText(
+      `You have logged ${params.actualCalories} kcal today, with about ${params.remainingCalories} kcal remaining. The rhythm is close to plan; eat normally at the next meal.`,
+      params.safetyContext,
+      params.language,
+    )
+  }
+
   return ensureSafetyText(
     `今天目前摄入 ${params.actualCalories} kcal，距离目标还剩约 ${params.remainingCalories} kcal。节奏整体还稳，下一餐按正常计划吃就好。`,
     params.safetyContext,
+    params.language,
   )
 }
 
@@ -254,6 +355,7 @@ export async function getDailyPlanGap(date = dayjs().format('YYYY-MM-DD')): Prom
     }),
   ])
   const settings = getSettings()
+  const language = settings.language === 'zh' ? 'zh' : 'en'
   const dailyTarget = latestPlan?.dailyCalorieTarget ?? settings.calorieGoal
 
   if (!dailyTarget || dailyTarget <= 0) {
@@ -277,7 +379,7 @@ export async function getDailyPlanGap(date = dayjs().format('YYYY-MM-DD')): Prom
       const planned = plannedMealsByType.get(mealType)
       return {
         mealType,
-        label: mealTypeLabels[mealType],
+        label: getMealTypeLabel(mealType, language),
         ratio: ratioMap[mealType],
         calories: planned
           ? planned.totalCalories
@@ -309,14 +411,16 @@ export async function getDailyPlanGap(date = dayjs().format('YYYY-MM-DD')): Prom
     planningProfile: currentProfile ?? latestPlan?.profileSnapshot ?? null,
     confirmedPlannedMeals,
     relevantMemories,
-    safetyContext: buildSafetyContext(currentProfile ?? latestPlan?.profileSnapshot ?? null, relevantMemories),
+    safetyContext: buildSafetyContext(currentProfile ?? latestPlan?.profileSnapshot ?? null, relevantMemories, language),
   }
 }
 
 export function buildDynamicPlanSuggestion(
   gap: DailyPlanGap,
   mealType?: MealType,
+  language?: AppLanguage,
 ): DynamicPlanSuggestion | null {
+  const resolvedLanguage = resolveLanguage(language)
   const selectedMealGap = mealType
     ? gap.mealGaps.find((item) => item.mealType === mealType)
     : null
@@ -325,7 +429,7 @@ export function buildDynamicPlanSuggestion(
     const absDelta = Math.abs(selectedMealGap.deltaCalories)
     const significantDelta = absDelta >= SIGNIFICANT_CALORIES &&
       absDelta >= selectedMealGap.plannedCalories * SIGNIFICANT_PERCENT
-    const recommendedMealWindow = getRecommendedMealWindow(selectedMealGap.mealType)
+    const recommendedMealWindow = getRecommendedMealWindow(selectedMealGap.mealType, resolvedLanguage)
 
     if (significantDelta && selectedMealGap.deltaCalories > 0) {
       const suggestedCalories = clamp(roundToNearestTen(selectedMealGap.deltaCalories * 0.8), 200, 500)
@@ -345,6 +449,7 @@ export function buildDynamicPlanSuggestion(
           suggestedCalories,
           recommendedMealWindow,
           safetyContext: gap.safetyContext,
+          language: resolvedLanguage,
         }),
       }
     }
@@ -367,6 +472,7 @@ export function buildDynamicPlanSuggestion(
           suggestedCalories,
           recommendedMealWindow,
           safetyContext: gap.safetyContext,
+          language: resolvedLanguage,
         }),
       }
     }
@@ -388,14 +494,15 @@ export function buildDynamicPlanSuggestion(
       deltaCalories: dailyDelta,
       suggestedCalories,
       suggestionType: 'supplement',
-      recommendedMealWindow: '下一餐',
+      recommendedMealWindow: resolvedLanguage === 'zh' ? '下一餐' : 'the next meal',
       suggestionText: buildSupplementText({
         plannedCalories: gap.dailyTarget,
         actualCalories: gap.actualCalories,
         deltaCalories: dailyDelta,
         suggestedCalories,
-        recommendedMealWindow: '下一餐',
+        recommendedMealWindow: resolvedLanguage === 'zh' ? '下一餐' : 'the next meal',
         safetyContext: gap.safetyContext,
+        language: resolvedLanguage,
       }),
     }
   }
@@ -411,14 +518,15 @@ export function buildDynamicPlanSuggestion(
       deltaCalories: dailyDelta,
       suggestedCalories,
       suggestionType: 'reduce',
-      recommendedMealWindow: '下一餐或明天',
+      recommendedMealWindow: resolvedLanguage === 'zh' ? '下一餐或明天' : 'the next meal or tomorrow',
       suggestionText: buildReduceText({
         plannedCalories: gap.dailyTarget,
         actualCalories: gap.actualCalories,
         deltaCalories: dailyDelta,
         suggestedCalories,
-        recommendedMealWindow: '下一餐或明天',
+        recommendedMealWindow: resolvedLanguage === 'zh' ? '下一餐或明天' : 'the next meal or tomorrow',
         safetyContext: gap.safetyContext,
+        language: resolvedLanguage,
       }),
     }
   }
@@ -438,6 +546,7 @@ export function buildDynamicPlanSuggestion(
       plannedCalories: gap.dailyTarget,
       remainingCalories: gap.remainingCalories,
       safetyContext: gap.safetyContext,
+      language: resolvedLanguage,
     }),
   }
 }
@@ -447,6 +556,7 @@ export async function evaluateDailyPlanAdjustment(params: {
   mealType?: MealType
   persist?: boolean
   generatedBy?: 'local_rule' | 'agent'
+  language?: AppLanguage
 } = {}): Promise<{
   gap: DailyPlanGap | null
   suggestion: DynamicPlanSuggestion | null
@@ -455,6 +565,7 @@ export async function evaluateDailyPlanAdjustment(params: {
   const date = params.date ?? dayjs().format('YYYY-MM-DD')
   const gap = await getDailyPlanGap(date)
   const settings = getSettings()
+  const language = resolveLanguage(params.language ?? settings.language)
 
   if (!gap) {
     return {
@@ -464,7 +575,7 @@ export async function evaluateDailyPlanAdjustment(params: {
     }
   }
 
-  const suggestion = buildDynamicPlanSuggestion(gap, params.mealType)
+  const suggestion = buildDynamicPlanSuggestion(gap, params.mealType, language)
   const shouldPersist = params.persist === true &&
     (params.generatedBy === 'agent' || (settings.reminders.enabled && settings.reminders.planAdjustmentReminders)) &&
     suggestion !== null

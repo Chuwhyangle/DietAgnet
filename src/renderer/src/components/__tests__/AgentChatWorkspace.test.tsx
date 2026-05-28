@@ -65,7 +65,7 @@ describe('AgentChatWorkspace', () => {
         <AgentChatWorkspace />
       </MemoryRouter>,
     )
-    expect(screen.getByText('猫猫虫 AI 对话')).toBeInTheDocument()
+    expect(screen.getByText('Diet Agent AI Chat')).toBeInTheDocument()
   })
 
   it('handles typing in the text area without throwing', async () => {

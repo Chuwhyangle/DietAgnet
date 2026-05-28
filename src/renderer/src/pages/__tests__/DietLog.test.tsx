@@ -37,6 +37,7 @@ vi.mock('../../stores/dietLog', () => ({
 
 vi.mock('../../stores/settings', () => ({
   getSettings: vi.fn().mockReturnValue({
+    language: 'en',
     nickname: '测试用户',
     calorieGoal: 2000,
     agent: { provider: 'openai', apiBaseUrl: '', model: 'gpt-4' },
@@ -116,9 +117,8 @@ describe('DietLogPage', () => {
         <DietLogPage />
       </MemoryRouter>,
     )
-    // The button text is "添加记录"
     const buttons = screen.getAllByRole('button')
-    const addButton = buttons.find(btn => btn.textContent?.includes('添加记录'))
+    const addButton = buttons.find(btn => btn.textContent?.includes('Add Entry'))
     expect(addButton).toBeTruthy()
   })
 
@@ -131,9 +131,9 @@ describe('DietLogPage', () => {
 
     const user = userEvent.setup()
     const buttons = screen.getAllByRole('button')
-    const addButton = buttons.find(btn => btn.textContent?.includes('添加记录'))!
+    const addButton = buttons.find(btn => btn.textContent?.includes('Add Entry'))!
     await user.click(addButton)
     // Modal should appear - look for the modal title
-    expect(screen.getByText('🐛 添加饮食记录')).toBeInTheDocument()
+    expect(screen.getByText('🐛 Add diet log entry')).toBeInTheDocument()
   })
 })

@@ -17,6 +17,7 @@ vi.mock('../../stores/dietLog', () => ({
 
 vi.mock('../../stores/settings', () => ({
   getSettings: vi.fn().mockReturnValue({
+    language: 'en',
     nickname: '小可爱',
     calorieGoal: 2000,
     agent: { provider: 'openai', apiBaseUrl: '', model: 'gpt-4' },
@@ -109,13 +110,13 @@ describe('HomePage', () => {
     expect(container).toBeTruthy()
   })
 
-  it('displays the greeting with nickname', () => {
+  it('displays the greeting with nickname', async () => {
     render(
       <MemoryRouter>
         <HomePage />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/小可爱/)).toBeInTheDocument()
+    expect(await screen.findByText(/小可爱/)).toBeInTheDocument()
   })
 
   it('displays the plan builder action button', () => {
@@ -124,7 +125,7 @@ describe('HomePage', () => {
         <HomePage />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('button', { name: /开始制定计划/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Start planning/ })).toBeInTheDocument()
   })
 
   it('handles clicking the plan builder button without throwing', async () => {
@@ -135,7 +136,7 @@ describe('HomePage', () => {
     )
 
     const user = userEvent.setup()
-    const planButton = screen.getByRole('button', { name: /开始制定计划/ })
+    const planButton = screen.getByRole('button', { name: /Start planning/ })
     await user.click(planButton)
     // PlanBuilder mock should appear
     expect(screen.getByTestId('plan-builder-mock')).toBeInTheDocument()

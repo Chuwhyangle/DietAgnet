@@ -52,7 +52,7 @@ vi.mock('../../stores/planning', () => ({
 // Mock the planning engine
 vi.mock('../../planning/engine', () => ({
   buildPlanningFollowUps: vi.fn().mockReturnValue([]),
-  buildPlanningPrompt: vi.fn().mockReturnValue('请输入你的身高'),
+  buildPlanningPrompt: vi.fn().mockReturnValue('Enter your height'),
   buildProfilePatch: vi.fn().mockReturnValue({}),
   formatPlanningAnswer: vi.fn().mockReturnValue('170 cm'),
   generatePlanningPlan: vi.fn().mockResolvedValue({}),
@@ -63,13 +63,13 @@ vi.mock('../../planning/engine', () => ({
   getPlanningProgress: vi.fn().mockReturnValue({ percent: 0, completedCount: 0, totalCount: 10 }),
   getPlanningStep: vi.fn().mockReturnValue({
     key: 'height',
-    label: '身高',
+    label: 'height',
     inputType: 'number',
     min: 100,
     max: 250,
     step: 1,
     unit: 'cm',
-    placeholder: '输入身高',
+    placeholder: 'Enter height',
   }),
   getPlanningStepSkipValue: vi.fn().mockReturnValue(null),
   getPreviousPlanningStepKey: vi.fn().mockReturnValue(null),
@@ -77,7 +77,7 @@ vi.mock('../../planning/engine', () => ({
   normalizePlanningAnswer: vi.fn().mockReturnValue(170),
   summarizePlanningProfile: vi.fn().mockReturnValue([]),
   validatePlanningAnswer: vi.fn().mockReturnValue(null),
-  getPlanGenerationLabel: vi.fn().mockReturnValue('AI 生成'),
+  getPlanGenerationLabel: vi.fn().mockReturnValue('AI generated'),
   getPlanVersionDiff: vi.fn().mockReturnValue(null),
 }))
 
@@ -94,13 +94,13 @@ describe('PlanBuilder', () => {
   it('renders nothing visible when closed', () => {
     render(<PlanBuilder open={false} onClose={vi.fn()} />)
     // Drawer should not show content when closed
-    expect(screen.queryByText('AI 引导式计划制定')).not.toBeInTheDocument()
+    expect(screen.queryByText('AI Guided Plan Builder')).not.toBeInTheDocument()
   })
 
   it('displays the drawer title when open', async () => {
     render(<PlanBuilder open={true} onClose={vi.fn()} />)
     // Ant Design Drawer renders the title
-    expect(screen.getByText('AI 引导式计划制定')).toBeInTheDocument()
+    expect(screen.getByText('AI Guided Plan Builder')).toBeInTheDocument()
   })
 
   it('handles clicking the close button without throwing', async () => {
@@ -121,8 +121,8 @@ describe('PlanBuilder', () => {
     const user = userEvent.setup()
 
     // First interaction: verify the drawer is open and find an input field
-    // The mocked engine returns step 'height' with inputType 'number' and placeholder '输入身高'
-    const input = screen.queryByPlaceholderText(/输入身高/)
+    // The mocked engine returns step 'height' with inputType 'number' and placeholder 'Enter height'
+    const input = screen.queryByPlaceholderText(/Enter height/)
     if (input) {
       // Second interaction: type a value into the planning step input
       await user.type(input, '170')
@@ -130,7 +130,7 @@ describe('PlanBuilder', () => {
     } else {
       // If the input isn't rendered (async loading), just verify the drawer title is present
       // and click close as the second interaction
-      expect(screen.getByText('AI 引导式计划制定')).toBeInTheDocument()
+      expect(screen.getByText('AI Guided Plan Builder')).toBeInTheDocument()
       const closeButton = screen.getByRole('button', { name: /Close/i })
       await user.click(closeButton)
     }

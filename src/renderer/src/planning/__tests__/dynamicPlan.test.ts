@@ -20,6 +20,7 @@ vi.mock('../../stores/settings', () => ({
   getSettings: vi.fn(() => ({
     nickname: '猫猫',
     calorieGoal: 2000,
+    language: 'en',
     reminders: {
       enabled: true,
       mealReminders: true,
@@ -237,8 +238,10 @@ describe('planning/dynamicPlan.getDailyPlanGap', () => {
     const gap = await getDailyPlanGap('2024-06-15')
     const suggestion = buildDynamicPlanSuggestion(gap!, 'lunch')
 
-    expect(suggestion?.suggestionText).toContain('豆制品')
-    expect(suggestion?.suggestionText).not.toContain('无糖酸奶')
+    expect(suggestion?.suggestionText).toContain('soy foods')
+    expect(suggestion?.suggestionText).not.toContain('unsweetened yogurt')
+    expect(buildDynamicPlanSuggestion(gap!, 'lunch', 'zh')?.suggestionText).toContain('豆制品')
+    expect(buildDynamicPlanSuggestion(gap!, 'lunch', 'zh')?.suggestionText).not.toContain('无糖酸奶')
     expect(gap?.safetyContext.avoidDairy).toBe(true)
   })
 
@@ -259,7 +262,8 @@ describe('planning/dynamicPlan.getDailyPlanGap', () => {
     const suggestion = buildDynamicPlanSuggestion(gap!, 'lunch')
 
     expect(gap?.safetyContext.conservative).toBe(true)
-    expect(suggestion?.suggestionText).toContain('请先按专业意见执行')
+    expect(suggestion?.suggestionText).toContain('follow professional guidance first')
+    expect(buildDynamicPlanSuggestion(gap!, 'lunch', 'zh')?.suggestionText).toContain('请先按专业意见执行')
     expect(suggestion?.suggestionText).not.toMatch(/跳过下一餐|完全不吃|极端节食/)
   })
 })

@@ -56,6 +56,7 @@ import {
   summarizePlanningProfile,
   validatePlanningAnswer,
 } from '../planning/engine'
+import { useI18n } from '../i18n'
 import './PlanBuilder.css'
 
 const { Paragraph, Text, Title } = Typography
@@ -83,30 +84,32 @@ function buildProfileSavePatch(
   }
 }
 
-function getSessionStatusLabel(session: PlanningSession | null): string {
+function getSessionStatusLabel(session: PlanningSession | null, language: 'en' | 'zh'): string {
   if (!session) {
-    return '未开始'
+    return language === 'zh' ? '未开始' : 'Not started'
   }
 
   switch (session.status) {
     case 'completed':
-      return '已完成'
+      return language === 'zh' ? '已完成' : 'Completed'
     case 'cancelled':
-      return '已取消'
+      return language === 'zh' ? '已取消' : 'Cancelled'
     default:
-      return '进行中'
+      return language === 'zh' ? '进行中' : 'In progress'
   }
 }
 
-function formatTimestamp(value?: string): string {
+function formatTimestamp(value: string | undefined, language: 'en' | 'zh'): string {
   if (!value) {
-    return '未保存'
+    return language === 'zh' ? '未保存' : 'Not saved'
   }
 
-  return new Date(value).toLocaleString('zh-CN')
+  return new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')
 }
 
 function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Element {
+  const { language } = useI18n()
+  const l = (zh: string, en: string): string => (language === 'zh' ? zh : en)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [session, setSession] = useState<PlanningSession | null>(null)
@@ -122,15 +125,15 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       return null
     }
 
-    return getPlanningStep(session.currentStepKey)
-  }, [currentFollowUp, session?.currentStepKey])
+    return getPlanningStep(session.currentStepKey, language)
+  }, [currentFollowUp, language, session?.currentStepKey])
   const planningProgress = useMemo(
     () => getPlanningProgress(profileSnapshot, session?.completedStepKeys ?? []),
     [profileSnapshot, session?.completedStepKeys],
   )
   const profileSummaryItems = useMemo(
-    () => summarizePlanningProfile(profileSnapshot),
-    [profileSnapshot],
+    () => summarizePlanningProfile(profileSnapshot, language),
+    [language, profileSnapshot],
   )
 
   useEffect(() => {
@@ -175,12 +178,18 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               createPlanningMessage(
                 'assistant',
                 completedStepKeys.length > 0
-                  ? '我接着帮你完善资料。你看到的每一步都会同步保存到本地，哪里不对就直接改掉。'
-                  : '我会一步一步收集你的身体、目标和饮食习惯，最后生成一份可审计的专属计划。',
+                  ? l(
+                    '我接着帮你完善资料。你看到的每一步都会同步保存到本地，哪里不对就直接改掉。',
+                    'I will keep helping you complete the profile. Each step is saved locally, and you can replace anything that looks off.',
+                  )
+                  : l(
+                    '我会一步一步收集你的身体、目标和饮食习惯，最后生成一份可审计的专属计划。',
+                    'I will collect your body data, goals, and eating habits step by step, then generate an auditable personal plan.',
+                  ),
               ),
               createPlanningMessage(
                 'assistant',
-                buildPlanningPrompt(workingSession.currentStepKey, workingProfile),
+                buildPlanningPrompt(workingSession.currentStepKey, workingProfile, language),
               ),
             ]
 
@@ -209,13 +218,25 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
             createPlanningMessage(
               'assistant',
               completedStepKeys.length > 0
-                ? '我先用你之前保存的资料做底稿，再逐项确认一次。需要修改时直接覆盖就好。'
-                : '点击开始后，我会像顾问一样一步一步问你资料，所有记录都会写入本地数据库。',
+                ? l(
+                  '我先用你之前保存的资料做底稿，再逐项确认一次。需要修改时直接覆盖就好。',
+                  'I will use your saved profile as a draft, then confirm each item. Replace any value that needs updating.',
+                )
+                : l(
+                  '点击开始后，我会像顾问一样一步一步问你资料，所有记录都会写入本地数据库。',
+                  'After you start, I will ask for your profile step by step and save everything to the local database.',
+                ),
             ),
-            createPlanningMessage('assistant', buildPlanningPrompt(initialStepKey, baseProfile)),
+            createPlanningMessage('assistant', buildPlanningPrompt(initialStepKey, baseProfile, language)),
           ]
           : [
-            createPlanningMessage('assistant', '你的资料已经很完整啦，可以直接重新生成计划。'),
+            createPlanningMessage(
+              'assistant',
+              l(
+                '你的资料已经很完整啦，可以直接重新生成计划。',
+                'Your profile is already complete, so you can regenerate the plan directly.',
+              ),
+            ),
           ]
 
         const startedSession = (await appendPlanningMessages(
@@ -228,7 +249,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
         setGeneratedPlan(null)
       } catch (error) {
         console.error('Failed to initialize plan builder:', error)
-        const errorMessage = error instanceof Error ? error.message : '初始化计划流程失败'
+        const errorMessage = error instanceof Error ? error.message : l('初始化计划流程失败', 'Failed to initialize the planning flow')
         message.error(errorMessage)
       } finally {
         setLoading(false)
@@ -236,7 +257,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     }
 
     void loadPlanner()
-  }, [open])
+  }, [language, open])
 
   useEffect(() => {
     setInlineError(null)
@@ -282,7 +303,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     nextProfileSnapshot: Partial<PlanningProfile>,
   ): Promise<void> => {
     if (!workingSession.id) {
-      throw new Error('当前会话缺少 ID，无法生成计划。')
+      throw new Error(l('当前会话缺少 ID，无法生成计划。', 'The current session is missing an ID, so the plan cannot be generated.'))
     }
 
     const completedProfile = await savePlanningProfile(
@@ -290,11 +311,11 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     )
 
     let sessionAfterStatus = await appendPlanningMessages(workingSession.id, [
-      createPlanningMessage('system', '资料已收齐，开始生成专属计划...', 'status'),
+      createPlanningMessage('system', l('资料已收齐，开始生成专属计划...', 'Profile complete. Generating your personal plan...'), 'status'),
     ])
     sessionAfterStatus = sessionAfterStatus ?? workingSession
 
-    const planDraft = await generatePlanningPlan(completedProfile)
+    const planDraft = await generatePlanningPlan(completedProfile, language)
     const savedPlan = await savePersonalDietPlan({
       ...planDraft,
       sourceSessionId: workingSession.id,
@@ -312,19 +333,28 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       createPlanningMessage(
         'system',
         planDraft.generationMode === 'ai'
-          ? `计划内容已由模型 ${planDraft.generatedWithModel ?? '当前通道'} 生成并保存。`
-          : '当前 AI 通道不可用，已用本地安全模板生成计划并保存。',
+          ? l(
+            `计划内容已由模型 ${planDraft.generatedWithModel ?? '当前通道'} 生成并保存。`,
+            `The plan was generated and saved by ${planDraft.generatedWithModel ?? 'the configured model'}.`,
+          )
+          : l(
+            '当前 AI 通道不可用，已用本地安全模板生成计划并保存。',
+            'The AI channel is unavailable, so a local safety template was generated and saved.',
+          ),
         'status',
       ),
       createPlanningMessage(
         'assistant',
-        `计划已经准备好啦。你的日均热量目标先按 ${savedPlan.dailyCalorieTarget} kcal 附近执行，首页会展示完整结果。`,
+        l(
+          `计划已经准备好啦。你的日均热量目标先按 ${savedPlan.dailyCalorieTarget} kcal 附近执行，首页会展示完整结果。`,
+          `Your plan is ready. Start around ${savedPlan.dailyCalorieTarget} kcal per day; the full result will appear on the Home page.`,
+        ),
       ),
     ])) ?? finalizedSession
 
     applySessionState(finalizedSession, completedProfile)
     setGeneratedPlan(savedPlan)
-    message.success('专属饮食计划已生成并保存到本地。')
+    message.success(l('专属饮食计划已生成并保存到本地。', 'Your personal diet plan was generated and saved locally.'))
     onCompleted?.(savedPlan)
   }
 
@@ -339,23 +369,23 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     try {
       const rawValue = forcedRawValue ?? (
         currentStep.optional && !String(draftValue ?? '').trim()
-          ? getPlanningStepSkipValue(currentStep.key) ?? ''
+          ? getPlanningStepSkipValue(currentStep.key, language) ?? ''
           : draftValue
       )
 
       if (rawValue === undefined) {
-        setInlineError(`请先填写${currentStep.label}。`)
+        setInlineError(l(`请先填写${currentStep.label}。`, `Please fill in ${currentStep.label}.`))
         return
       }
 
-      const validationMessage = validatePlanningAnswer(currentStep.key, rawValue)
+      const validationMessage = validatePlanningAnswer(currentStep.key, rawValue, language)
       if (validationMessage) {
         setInlineError(validationMessage)
         return
       }
 
       const normalizedStepValue = normalizePlanningAnswer(currentStep.key, rawValue)
-      const prettyAnswer = formatPlanningAnswer(currentStep.key, normalizedStepValue)
+      const prettyAnswer = formatPlanningAnswer(currentStep.key, normalizedStepValue, language)
       const nextProfileSnapshot = {
         ...profileSnapshot,
         ...buildProfilePatch(currentStep.key, normalizedStepValue),
@@ -366,7 +396,11 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
 
       let workingSession = (await appendPlanningMessages(session.id, [
         createPlanningMessage('user', prettyAnswer),
-        createPlanningMessage('system', `已记录：${currentStep.label} = ${prettyAnswer}`, 'status'),
+        createPlanningMessage(
+          'system',
+          l(`已记录：${currentStep.label} = ${prettyAnswer}`, `Recorded: ${currentStep.label} = ${prettyAnswer}`),
+          'status',
+        ),
       ])) ?? session
 
       const completedStepKeys = Array.from(
@@ -379,7 +413,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
         ...(workingSession.pendingFollowUps ?? []).map((item) => item.code),
         ...(workingSession.resolvedFollowUpCodes ?? []),
       ]
-      const newFollowUps = buildPlanningFollowUps(savedProfile, existingFollowUpCodes)
+      const newFollowUps = buildPlanningFollowUps(savedProfile, existingFollowUpCodes, language)
       const nextStepKey = getNextPlanningStepKey(currentStep.key)
 
       workingSession = (await updatePlanningSession(session.id, {
@@ -409,7 +443,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       if (nextStepKey) {
         workingSession = (await appendAssistantPrompt(
           session.id,
-          buildPlanningPrompt(nextStepKey, savedProfile),
+          buildPlanningPrompt(nextStepKey, savedProfile, language),
         )) ?? workingSession
         applySessionState(workingSession, savedProfile)
         return
@@ -418,7 +452,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       await finalizePlan(workingSession, savedProfile)
     } catch (error) {
       console.error('Failed to submit planning step:', error)
-      const errorMessage = error instanceof Error ? error.message : '保存当前问题失败'
+      const errorMessage = error instanceof Error ? error.message : l('保存当前问题失败', 'Failed to save the current answer')
       setInlineError(errorMessage)
     } finally {
       setSubmitting(false)
@@ -432,7 +466,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
 
     const normalizedAnswer = String(draftValue ?? '').trim()
     if (!skip && !normalizedAnswer) {
-      setInlineError('请补充说明，或者点击“暂时跳过”。')
+      setInlineError(l('请补充说明，或者点击“暂时跳过”。', 'Please add details, or click “Skip for now”.'))
       return
     }
 
@@ -440,7 +474,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     setInlineError(null)
 
     try {
-      const answerText = skip ? '暂未补充' : normalizedAnswer
+      const answerText = skip ? l('暂未补充', 'No details added yet') : normalizedAnswer
       const nextProfileSnapshot = { ...profileSnapshot }
 
       if (currentFollowUp.targetField && !skip) {
@@ -449,6 +483,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
             ? nextProfileSnapshot[currentFollowUp.targetField]
             : undefined,
           answerText,
+          language,
         )
       }
 
@@ -461,8 +496,14 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
         createPlanningMessage(
           'system',
           skip
-            ? `异常确认已记录：${currentFollowUp.note}（暂未补充说明）`
-            : `异常确认已记录：${currentFollowUp.note}`,
+            ? l(
+              `异常确认已记录：${currentFollowUp.note}（暂未补充说明）`,
+              `Follow-up recorded: ${currentFollowUp.note} (no details added yet)`,
+            )
+            : l(
+              `异常确认已记录：${currentFollowUp.note}`,
+              `Follow-up recorded: ${currentFollowUp.note}`,
+            ),
           'status',
         ),
       ])) ?? session
@@ -492,7 +533,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       if (workingSession.currentStepKey) {
         workingSession = (await appendAssistantPrompt(
           session.id,
-          buildPlanningPrompt(workingSession.currentStepKey, savedProfile),
+          buildPlanningPrompt(workingSession.currentStepKey, savedProfile, language),
         )) ?? workingSession
         applySessionState(workingSession, savedProfile)
         return
@@ -501,7 +542,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       await finalizePlan(workingSession, savedProfile)
     } catch (error) {
       console.error('Failed to submit planning follow-up:', error)
-      const errorMessage = error instanceof Error ? error.message : '保存异常说明失败'
+      const errorMessage = error instanceof Error ? error.message : l('保存异常说明失败', 'Failed to save follow-up details')
       setInlineError(errorMessage)
     } finally {
       setSubmitting(false)
@@ -529,14 +570,17 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
       workingSession = (await appendPlanningMessages(session.id, [
         createPlanningMessage(
           'assistant',
-          `好的，我们回到上一项。${buildPlanningPrompt(previousStepKey, profileSnapshot)}`,
+          l(
+            `好的，我们回到上一项。${buildPlanningPrompt(previousStepKey, profileSnapshot, language)}`,
+            `Sure, let’s go back to the previous item. ${buildPlanningPrompt(previousStepKey, profileSnapshot, language)}`,
+          ),
         ),
       ])) ?? workingSession
 
       applySessionState(workingSession, profileSnapshot)
     } catch (error) {
       console.error('Failed to go back to previous planning step:', error)
-      const errorMessage = error instanceof Error ? error.message : '回到上一题失败'
+      const errorMessage = error instanceof Error ? error.message : l('回到上一题失败', 'Failed to return to the previous question')
       setInlineError(errorMessage)
     } finally {
       setSubmitting(false)
@@ -550,7 +594,10 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
           value={typeof draftValue === 'string' ? draftValue : ''}
           onChange={(event) => setDraftValue(event.target.value)}
           rows={4}
-          placeholder="补充说明异常背景、医生建议或执行限制；如果暂时没有，也可以先跳过。"
+          placeholder={l(
+            '补充说明异常背景、医生建议或执行限制；如果暂时没有，也可以先跳过。',
+            'Add context, medical advice, or execution limits. If you do not have details right now, you can skip for now.',
+          )}
           disabled={submitting}
         />
       )
@@ -614,32 +661,35 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     <Drawer
       open={open}
       onClose={handleClose}
-      title="AI 引导式计划制定"
+      title={l('AI 引导式计划制定', 'AI Guided Plan Builder')}
       width={860}
       className="plan-builder-drawer"
       destroyOnClose={false}
       extra={
         <Tag color={session?.status === 'completed' ? 'success' : 'processing'} bordered={false}>
-          {getSessionStatusLabel(session)}
+          {getSessionStatusLabel(session, language)}
         </Tag>
       }
     >
       {loading ? (
         <div className="plan-builder-loading">
           <RobotOutlined spin />
-          <Text type="secondary">正在准备引导流程...</Text>
+          <Text type="secondary">{l('正在准备引导流程...', 'Preparing the guided flow...')}</Text>
         </div>
       ) : (
         <div className="plan-builder-shell">
           <Card className="plan-builder-hero" bordered={false}>
             <div className="plan-builder-hero-top">
               <div>
-                <Tag color="gold" bordered={false}>主线</Tag>
+                <Tag color="gold" bordered={false}>{l('主线', 'Main Flow')}</Tag>
                 <Title level={4} style={{ marginTop: 12, marginBottom: 8 }}>
-                  一步一步建立你的专属饮食档案
+                  {l('一步一步建立你的专属饮食档案', 'Build Your Personal Diet Profile Step by Step')}
                 </Title>
                 <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                  这不是接口测试。这里记录的是你的真实身体数据、目标和生活习惯，所有内容都会落到本地数据库，后续每次改动都可追踪。
+                  {l(
+                    '这不是接口测试。这里记录的是你的真实身体数据、目标和生活习惯，所有内容都会落到本地数据库，后续每次改动都可追踪。',
+                    'This records your real body data, goals, and lifestyle habits. Everything is stored locally and future changes remain traceable.',
+                  )}
                 </Paragraph>
               </div>
               <div className="plan-builder-progress-ring">
@@ -650,7 +700,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                   strokeColor="#FF8FA3"
                 />
                 <Text type="secondary">
-                  已确认 {planningProgress.completedCount}/{planningProgress.totalCount} 项
+                  {l('已确认', 'Confirmed')} {planningProgress.completedCount}/{planningProgress.totalCount} {l('项', 'items')}
                 </Text>
               </div>
             </div>
@@ -662,22 +712,22 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               items={[
                 {
                   key: 'session',
-                  label: '会话 ID',
-                  children: session?.id ?? '未创建',
+                  label: l('会话 ID', 'Session ID'),
+                  children: session?.id ?? l('未创建', 'Not created'),
                 },
                 {
                   key: 'storage',
-                  label: '存储位置',
-                  children: '本地 Dexie 数据库 diet-agent-planning',
+                  label: l('存储位置', 'Storage'),
+                  children: l('本地 Dexie 数据库 diet-agent-planning', 'Local Dexie database diet-agent-planning'),
                 },
                 {
                   key: 'updatedAt',
-                  label: '最近保存',
-                  children: formatTimestamp(session?.updatedAt),
+                  label: l('最近保存', 'Last saved'),
+                  children: formatTimestamp(session?.updatedAt, language),
                 },
                 {
                   key: 'pending',
-                  label: '待确认异常',
+                  label: l('待确认异常', 'Pending follow-ups'),
                   children: session?.pendingFollowUps?.length ?? 0,
                 },
               ]}
@@ -686,7 +736,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
 
           <Row gutter={[16, 16]} className="plan-builder-overview">
             <Col xs={24} md={11}>
-              <Card className="plan-builder-summary-card" title="当前档案摘要">
+              <Card className="plan-builder-summary-card" title={l('当前档案摘要', 'Current Profile Summary')}>
                 {profileSummaryItems.length > 0 ? (
                   <div className="plan-builder-summary-list">
                     {profileSummaryItems.map((item) => (
@@ -699,35 +749,38 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="还没有收集到资料"
+                    description={l('还没有收集到资料', 'No profile details collected yet')}
                   />
                 )}
               </Card>
             </Col>
             <Col xs={24} md={13}>
-              <Card className="plan-builder-summary-card" title="当前状态">
+              <Card className="plan-builder-summary-card" title={l('当前状态', 'Current Status')}>
                 <Space wrap size={[8, 8]}>
                   <Tag icon={<ClockCircleOutlined />} color="processing" bordered={false}>
-                    {session?.status === 'completed' ? '本轮已完成' : '逐步采集中'}
+                    {session?.status === 'completed' ? l('本轮已完成', 'Completed') : l('逐步采集中', 'Collecting step by step')}
                   </Tag>
                   <Tag icon={<CheckCircleOutlined />} color="success" bordered={false}>
-                    已保存到本地
+                    {l('已保存到本地', 'Saved locally')}
                   </Tag>
                   {(session?.pendingFollowUps?.length ?? 0) > 0 && (
                     <Tag icon={<ExclamationCircleOutlined />} color="warning" bordered={false}>
-                      有 {session?.pendingFollowUps.length} 项异常确认
+                      {l('有', 'Has')} {session?.pendingFollowUps.length} {l('项异常确认', 'follow-ups')}
                     </Tag>
                   )}
                 </Space>
 
                 <Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
-                  当前流程会先做结构化采集和本地校验，再在最后一步尝试调用已配置的模型生成计划文案。就算 AI 通道暂时不可用，档案也会照常保存，计划会走本地兜底。
+                  {l(
+                    '当前流程会先做结构化采集和本地校验，再在最后一步尝试调用已配置的模型生成计划文案。就算 AI 通道暂时不可用，档案也会照常保存，计划会走本地兜底。',
+                    'This flow collects structured profile data, validates it locally, then tries the configured model for plan wording at the final step. If AI is unavailable, the profile is still saved and a local fallback plan is used.',
+                  )}
                 </Paragraph>
               </Card>
             </Col>
           </Row>
 
-          <Card className="plan-builder-transcript-card" title="引导记录">
+          <Card className="plan-builder-transcript-card" title={l('引导记录', 'Guided Transcript')}>
             <div className="plan-builder-transcript">
               {(session?.transcript ?? []).map((entry) => {
                 if (entry.kind === 'status' || entry.kind === 'warning' || entry.role === 'system') {
@@ -760,19 +813,19 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
             <Card className="plan-builder-result-card" title={generatedPlan.title}>
               <div className="plan-builder-result-metrics">
                 <div className="plan-builder-result-metric">
-                  <Text type="secondary">热量目标</Text>
+                  <Text type="secondary">{l('热量目标', 'Calories')}</Text>
                   <Text strong>{generatedPlan.dailyCalorieTarget} kcal</Text>
                 </div>
                 <div className="plan-builder-result-metric">
-                  <Text type="secondary">蛋白质</Text>
+                  <Text type="secondary">{l('蛋白质', 'Protein')}</Text>
                   <Text strong>{generatedPlan.proteinTarget} g</Text>
                 </div>
                 <div className="plan-builder-result-metric">
-                  <Text type="secondary">碳水</Text>
+                  <Text type="secondary">{l('碳水', 'Carbs')}</Text>
                   <Text strong>{generatedPlan.carbsTarget} g</Text>
                 </div>
                 <div className="plan-builder-result-metric">
-                  <Text type="secondary">脂肪</Text>
+                  <Text type="secondary">{l('脂肪', 'Fat')}</Text>
                   <Text strong>{generatedPlan.fatTarget} g</Text>
                 </div>
               </div>
@@ -780,7 +833,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               <Paragraph style={{ marginTop: 16 }}>{generatedPlan.summary}</Paragraph>
 
               <div className="plan-builder-result-block">
-                <Text strong>执行建议</Text>
+                <Text strong>{l('执行建议', 'Action Guidance')}</Text>
                 <ul className="plan-builder-result-list">
                   {generatedPlan.mealGuidance.map((item) => (
                     <li key={item}>{item}</li>
@@ -789,7 +842,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               </div>
 
               <div className="plan-builder-result-block">
-                <Text strong>注意事项</Text>
+                <Text strong>{l('注意事项', 'Cautions')}</Text>
                 <ul className="plan-builder-result-list">
                   {generatedPlan.cautionNotes.map((item) => (
                     <li key={item}>{item}</li>
@@ -800,11 +853,19 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               <Alert
                 type={generatedPlan.generationMode === 'ai' ? 'success' : 'info'}
                 showIcon
-                message={generatedPlan.generationMode === 'ai' ? '本次已调用模型生成计划文案' : '本次使用本地安全模板生成计划'}
+                message={generatedPlan.generationMode === 'ai'
+                  ? l('本次已调用模型生成计划文案', 'This plan was generated with the model')
+                  : l('本次使用本地安全模板生成计划', 'This plan used the local safety template')}
                 description={
                   generatedPlan.generationMode === 'ai'
-                    ? `使用模型：${generatedPlan.generatedWithModel ?? '当前已配置模型'}`
-                    : '你仍然可以在 AI 通道恢复后重新走一轮采集并生成新的计划。'
+                    ? l(
+                      `使用模型：${generatedPlan.generatedWithModel ?? '当前已配置模型'}`,
+                      `Model: ${generatedPlan.generatedWithModel ?? 'configured model'}`,
+                    )
+                    : l(
+                      '你仍然可以在 AI 通道恢复后重新走一轮采集并生成新的计划。',
+                      'You can regenerate a new plan after the AI channel is available again.',
+                    )
                 }
               />
             </Card>
@@ -813,7 +874,11 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
           {session?.status !== 'completed' && (
             <Card
               className="plan-builder-input-card"
-              title={currentFollowUp ? '异常确认' : currentStep ? `当前问题：${currentStep.label}` : '等待处理'}
+              title={currentFollowUp
+                ? l('异常确认', 'Follow-up Check')
+                : currentStep
+                  ? l(`当前问题：${currentStep.label}`, `Current question: ${currentStep.label}`)
+                  : l('等待处理', 'Waiting')}
             >
               {currentFollowUp ? (
                 <Paragraph type="secondary" className="plan-builder-question">
@@ -822,7 +887,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               ) : currentStep ? (
                 <>
                   <Paragraph type="secondary" className="plan-builder-question">
-                    {buildPlanningPrompt(currentStep.key, profileSnapshot)}
+                    {buildPlanningPrompt(currentStep.key, profileSnapshot, language)}
                   </Paragraph>
                   {currentStep.helperText && (
                     <Text type="secondary" className="plan-builder-helper">
@@ -832,7 +897,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                 </>
               ) : (
                 <Paragraph type="secondary" className="plan-builder-question">
-                  当前没有待处理问题。
+                  {l('当前没有待处理问题。', 'There is no pending question right now.')}
                 </Paragraph>
               )}
 
@@ -850,7 +915,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
               <div className="plan-builder-actions">
                 {!currentFollowUp && currentStep && getPreviousPlanningStepKey(currentStep.key) && (
                   <Button onClick={() => void handleBack()} disabled={submitting}>
-                    返回上一题
+                    {l('返回上一题', 'Back')}
                   </Button>
                 )}
 
@@ -859,11 +924,11 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                     onClick={() => void (
                       currentFollowUp
                         ? handleSubmitFollowUp(true)
-                        : handleSubmitCurrentStep(getPlanningStepSkipValue(currentStep?.key ?? 'dietPreference') ?? '')
+                        : handleSubmitCurrentStep(getPlanningStepSkipValue(currentStep?.key ?? 'dietPreference', language) ?? '')
                     )}
                     disabled={submitting}
                   >
-                    暂时跳过
+                    {l('暂时跳过', 'Skip for now')}
                   </Button>
                 )}
 
@@ -872,7 +937,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                   loading={submitting}
                   onClick={() => void (currentFollowUp ? handleSubmitFollowUp(false) : handleSubmitCurrentStep())}
                 >
-                  {currentFollowUp ? '保存异常说明' : '保存并继续'}
+                  {currentFollowUp ? l('保存异常说明', 'Save follow-up details') : l('保存并继续', 'Save and continue')}
                 </Button>
               </div>
             </Card>

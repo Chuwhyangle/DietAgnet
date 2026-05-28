@@ -12,6 +12,7 @@ const STORAGE_KEY = 'diet-agent-settings'
 describe('stores/settings', () => {
   it('returns sensible defaults when nothing is persisted', () => {
     const settings = getSettings()
+    expect(settings.language).toBe('en')
     expect(settings.nickname).toBe('')
     expect(settings.calorieGoal).toBe(2000)
     expect(settings.reminders.enabled).toBe(true)
@@ -31,6 +32,7 @@ describe('stores/settings', () => {
     saveSettings({
       ...initial,
       nickname: '猫猫',
+      language: 'zh',
       calorieGoal: 1800,
       reminders: {
         ...initial.reminders,
@@ -40,6 +42,7 @@ describe('stores/settings', () => {
 
     const roundTripped = getSettings()
     expect(roundTripped.nickname).toBe('猫猫')
+    expect(roundTripped.language).toBe('zh')
     expect(roundTripped.calorieGoal).toBe(1800)
     expect(roundTripped.reminders.cooldownHours).toBe(6)
   })
@@ -72,5 +75,16 @@ describe('stores/settings', () => {
     const settings = getSettings()
     expect(settings.memoryPostChatAutoConfidence).toBeLessThanOrEqual(1)
     expect(settings.memoryPostChatPendingMinConfidence).toBeGreaterThanOrEqual(0)
+  })
+
+  it('normalizes invalid language to English', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        language: 'fr',
+      }),
+    )
+    const settings = getSettings()
+    expect(settings.language).toBe('en')
   })
 })

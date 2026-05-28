@@ -68,7 +68,7 @@ describe('AutopilotSuggestion', () => {
     )
 
     const user = userEvent.setup()
-    const acceptButtons = screen.getAllByRole('button', { name: /选这个/ })
+    const acceptButtons = screen.getAllByRole('button', { name: /Choose this/ })
     await user.click(acceptButtons[0])
     // Should not throw
   })
@@ -80,6 +80,6 @@ describe('AutopilotSuggestion', () => {
       candidates: [],
     }
     render(<AutopilotSuggestion suggestion={fallbackSuggestion} />)
-    expect(screen.getByText(/没有合适的推荐/)).toBeInTheDocument()
+    expect(screen.getByText(/No suitable recommendation/)).toBeInTheDocument()
   })
 })

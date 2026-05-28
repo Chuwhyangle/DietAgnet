@@ -12,31 +12,33 @@ import {
   SETTINGS_UPDATED_EVENT,
 } from '../stores/events'
 import { checkProactiveReminder, getSnoozeUntil, type ProactiveReminder as ProactiveReminderModel } from './rules'
+import { useI18n, type TranslationKey } from '../i18n'
 import './ProactiveReminder.css'
 
 const { Text } = Typography
 
-function getRuleLabel(event: ProactiveEvent): string {
+function getRuleLabelKey(event: ProactiveEvent): TranslationKey {
   switch (event.ruleId) {
     case 'breakfast_check':
-      return '早餐提醒'
+      return 'proactive.rule.breakfast'
     case 'lunch_check':
-      return '午餐提醒'
+      return 'proactive.rule.lunch'
     case 'dinner_check':
-      return '晚餐提醒'
+      return 'proactive.rule.dinner'
     case 'weekly_report':
-      return '周报提醒'
+      return 'proactive.rule.weeklyReport'
     case 'open_app_plandrift':
-      return '计划偏移'
+      return 'proactive.rule.planDrift'
     case 'overcalorie_streak':
-      return '连续偏高'
+      return 'proactive.rule.overcalorieStreak'
     default:
-      return '主动提醒'
+      return 'proactive.rule.default'
   }
 }
 
 function ProactiveReminder(): JSX.Element | null {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [reminder, setReminder] = useState<ProactiveReminderModel | null>(null)
   const [notifiedEventId, setNotifiedEventId] = useState<number | null>(null)
 
@@ -116,14 +118,14 @@ function ProactiveReminder(): JSX.Element | null {
     <Card className="proactive-reminder-card">
       <div className="proactive-reminder-head">
         <Tag icon={<BellOutlined />} color="processing" bordered={false}>
-          {getRuleLabel(reminder.event)}
+          {t(getRuleLabelKey(reminder.event))}
         </Tag>
         <Button
           type="text"
           size="small"
           icon={<CloseOutlined />}
           onClick={() => void handleDismiss()}
-          aria-label="关闭提醒"
+          aria-label={t('proactive.close')}
         />
       </div>
 
@@ -141,7 +143,7 @@ function ProactiveReminder(): JSX.Element | null {
           icon={<ClockCircleOutlined />}
           onClick={() => void handleSnooze()}
         >
-          稍后
+          {t('common.later')}
         </Button>
       </div>
     </Card>

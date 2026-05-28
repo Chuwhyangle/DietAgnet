@@ -12,6 +12,7 @@ import { MemoryRouter } from 'react-router-dom'
 // Mock stores
 vi.mock('../../stores/settings', () => ({
   getSettings: vi.fn().mockReturnValue({
+    language: 'en',
     nickname: '测试用户',
     calorieGoal: 2000,
     onboarded: true,
@@ -149,7 +150,7 @@ describe('SettingsPage', () => {
         <SettingsPage />
       </MemoryRouter>,
     )
-    const nicknameInput = screen.getByPlaceholderText(/输入你的昵称/)
+    const nicknameInput = screen.getByPlaceholderText(/Enter your nickname/)
     expect(nicknameInput).toHaveValue('测试用户')
   })
 
@@ -161,7 +162,7 @@ describe('SettingsPage', () => {
     )
 
     const user = userEvent.setup()
-    const nicknameInput = screen.getByPlaceholderText(/输入你的昵称/)
+    const nicknameInput = screen.getByPlaceholderText(/Enter your nickname/)
     await user.clear(nicknameInput)
     await user.type(nicknameInput, '新昵称')
     expect(nicknameInput).toHaveValue('新昵称')

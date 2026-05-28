@@ -110,7 +110,12 @@ export async function runPostChatMemoryExtraction(params: {
     return
   }
 
-  if (assistant.startsWith('喵呜，刚刚没处理成功')) {
+  const language = settings.language === 'zh' ? 'zh' : 'en'
+
+  if (
+    assistant.startsWith('喵呜，刚刚没处理成功') ||
+    assistant.toLowerCase().startsWith('sorry, that did not work')
+  ) {
     return
   }
 
@@ -134,18 +139,31 @@ export async function runPostChatMemoryExtraction(params: {
     Math.max(0.35, settings.memoryPostChatPendingMinConfidence ?? 0.52),
   )
 
-  const systemPrompt = [
-    '你是饮食助手侧的「记忆抽取器」。只根据用户与助手的一段对话，判断是否出现值得长期保存的事实（偏好、忌口、过敏、作息、习惯、健康备注、目标等）。',
-    '输出必须是严格 JSON 数组，最多 3 条；若没有值得保存的内容，输出 []。',
-    '每条对象字段：type（必须是 preference|allergy|avoidance|habit|schedule|health_note|goal|other 之一）、content（一句独立可读的中文）、tags（字符串数组，可空）、confidence（0 到 1 的小数）、reason（可选，简短说明）。',
-    '严格要求：',
-    '- 仅当用户明确或强烈暗示「长期稳定」信息时才输出；不要记录一次性点餐，除非用户说「总是/通常/一直」。',
-    '- 不要做医学诊断；不要替用户编造未提及的过敏或疾病。',
-    '- content 不要用「同上」「如前」等指代。',
-    '- 输出只包含 JSON 数组本体，不要额外解释文字；如需代码块，只包一层 ```json。',
-  ].join('\n')
+  const systemPrompt = language === 'zh'
+    ? [
+      '你是饮食助手侧的「记忆抽取器」。只根据用户与助手的一段对话，判断是否出现值得长期保存的事实（偏好、忌口、过敏、作息、习惯、健康备注、目标等）。',
+      '输出必须是严格 JSON 数组，最多 3 条；若没有值得保存的内容，输出 []。',
+      '每条对象字段：type（必须是 preference|allergy|avoidance|habit|schedule|health_note|goal|other 之一）、content（一句独立可读的中文）、tags（字符串数组，可空）、confidence（0 到 1 的小数）、reason（可选，简短说明）。',
+      '严格要求：',
+      '- 仅当用户明确或强烈暗示「长期稳定」信息时才输出；不要记录一次性点餐，除非用户说「总是/通常/一直」。',
+      '- 不要做医学诊断；不要替用户编造未提及的过敏或疾病。',
+      '- content 不要用「同上」「如前」等指代。',
+      '- 输出只包含 JSON 数组本体，不要额外解释文字；如需代码块，只包一层 ```json。',
+    ].join('\n')
+    : [
+      'You are the Diet Agent memory extractor. From one user/assistant exchange only, decide whether there are facts worth storing long term: preferences, avoidances, allergies, schedule, habits, health notes, goals, and similar.',
+      'Output a strict JSON array with at most 3 items. If nothing is worth saving, output [].',
+      'Each object must have: type (one of preference|allergy|avoidance|habit|schedule|health_note|goal|other), content (one standalone readable English sentence), tags (string array, can be empty), confidence (0 to 1), reason (optional brief explanation).',
+      'Rules:',
+      '- Output only when the user clearly states or strongly implies stable long-term information; do not store one-off meal orders unless the user says always/usually/consistently.',
+      '- Do not diagnose medical conditions and do not invent allergies or illnesses not mentioned by the user.',
+      '- content must not use references like "same as above" or "as before".',
+      '- Output only the JSON array. If you use a code fence, use a single ```json fence.',
+    ].join('\n')
 
-  const userPrompt = `对话片段：\n用户：${user}\n助手：${assistant}`
+  const userPrompt = language === 'zh'
+    ? `对话片段：\n用户：${user}\n助手：${assistant}`
+    : `Conversation snippet:\nUser: ${user}\nAssistant: ${assistant}`
 
   let rawContent: string
   try {

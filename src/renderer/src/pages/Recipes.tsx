@@ -4,8 +4,10 @@ import { SearchOutlined } from '@ant-design/icons'
 import { recipes, type Recipe } from '../data/recipes'
 import { additionalChineseRecipes, stapleFoodRecipes } from '../data/chineseRecipes'
 import { westernRecipes } from '../data/westernRecipes'
+import { getLocalizedCategory, localizeRecipe, recipeSearchText } from '../data/recipeTranslations.en'
 import { getAllRecipesWithCustomFoods } from '../stores/customFoods'
 import { DIET_LOG_UPDATED_EVENT, RECIPE_CALIBRATION_UPDATED_EVENT } from '../stores/events'
+import { useI18n } from '../i18n'
 import './Recipes.css'
 
 const { Title, Text } = Typography
@@ -31,6 +33,7 @@ const newRecipeIds = new Set<string>([
 ])
 
 function RecipesPage(): JSX.Element {
+  const { language, t } = useI18n()
   const [searchText, setSearchText] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
@@ -76,43 +79,43 @@ function RecipesPage(): JSX.Element {
   )
 
   const filteredRecipes = useMemo(() => {
+    const query = searchText.trim().toLowerCase()
     return allRecipes.filter(recipe => {
-      const matchSearch = !searchText ||
-        recipe.name.includes(searchText) ||
-        recipe.ingredients.some(i => i.name.includes(searchText))
+      const matchSearch = !query || recipeSearchText(recipe, language).includes(query)
       const matchCategory = !selectedCategory || recipe.category === selectedCategory
       return matchSearch && matchCategory
     })
-  }, [allRecipes, searchText, selectedCategory])
+  }, [allRecipes, searchText, selectedCategory, language])
+  const localizedSelectedRecipe = selectedRecipe ? localizeRecipe(selectedRecipe, language) : null
 
   return (
     <div className="recipes-page">
       <div className="recipes-header">
-        <Title level={3}>🍳 猫猫虫的菜谱本</Title>
-        <Text type="secondary">精选 {allRecipes.length} 道中西式菜谱，总有一道适合今天的你~</Text>
+        <Title level={3}>🍳 {t('recipes.title')}</Title>
+        <Text type="secondary">{t('recipes.subtitle', { count: allRecipes.length })}</Text>
       </div>
 
       <div className="recipes-overview">
         <div className="recipes-overview-card">
-          <span>总菜谱</span>
+          <span>{t('recipes.total')}</span>
           <strong>{allRecipes.length}</strong>
-          <Text type="secondary">覆盖家常、早餐、甜品与西式料理</Text>
+          <Text type="secondary">{t('recipes.totalHelp')}</Text>
         </div>
         <div className="recipes-overview-card recipes-overview-card-western">
-          <span>西方菜肴</span>
+          <span>{t('recipes.western')}</span>
           <strong>{westernRecipeCount}</strong>
-          <Text type="secondary">意面、披萨、沙拉、甜点都能直接筛选</Text>
+          <Text type="secondary">{t('recipes.westernHelp')}</Text>
         </div>
         <div className="recipes-overview-card recipes-overview-card-new">
-          <span>本次新增</span>
+          <span>{t('recipes.new')}</span>
           <strong>{newRecipeCount}</strong>
-          <Text type="secondary">中式扩展 + 西式新菜，卡片右上角带 NEW 标</Text>
+          <Text type="secondary">{t('recipes.newHelp')}</Text>
         </div>
       </div>
 
       <div className="recipes-filter">
         <Input
-          placeholder="🔍 搜索菜名或食材..."
+          placeholder={`🔍 ${t('recipes.searchPlaceholder')}`}
           prefix={<SearchOutlined />}
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
@@ -124,7 +127,7 @@ function RecipesPage(): JSX.Element {
             className={`cat-tag ${!selectedCategory ? 'active' : ''}`}
             onClick={() => setSelectedCategory(null)}
           >
-            <span className="cat-tag-label">全部</span>
+            <span className="cat-tag-label">{t('recipes.all')}</span>
             <span className="cat-tag-count">{allRecipes.length}</span>
           </Tag>
           {categories.map(cat => (
@@ -134,24 +137,28 @@ function RecipesPage(): JSX.Element {
               color={selectedCategory === cat ? categoryColors[cat] : undefined}
               onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
             >
-              <span className="cat-tag-label">{cat}</span>
+              <span className="cat-tag-label">{getLocalizedCategory(cat, language)}</span>
               <span className="cat-tag-count">{categoryCountMap.get(cat) ?? 0}</span>
             </Tag>
           ))}
         </div>
       </div>
       <Text className="recipes-results-meta" type="secondary">
-        当前显示 {filteredRecipes.length} 道{selectedCategory ? `「${selectedCategory}」` : ''}菜谱
+        {t('recipes.results', {
+          count: filteredRecipes.length,
+          category: selectedCategory ? ` ${getLocalizedCategory(selectedCategory, language)}` : '',
+        })}
       </Text>
 
       {filteredRecipes.length === 0 ? (
         <Empty
-          description={<Text type="secondary">没有找到菜谱呢... 换个关键词试试？🐛</Text>}
+          description={<Text type="secondary">{t('recipes.empty')}</Text>}
           style={{ marginTop: 60 }}
         />
       ) : (
         <Row gutter={[16, 16]} className="recipes-grid">
           {filteredRecipes.map(recipe => {
+            const displayRecipe = localizeRecipe(recipe, language)
             const isWestern = recipe.category === '西式'
             const isNew = newRecipeIds.has(recipe.id)
             const cardClassName = [
@@ -171,13 +178,13 @@ function RecipesPage(): JSX.Element {
                 >
                   {isNew && <span className="recipe-card-new-badge">NEW</span>}
                   <div className="recipe-card-emoji">{recipe.emoji || '🍽️'}</div>
-                  <Title level={5} className="recipe-card-title">{recipe.name}</Title>
+                  <Title level={5} className="recipe-card-title">{displayRecipe.name}</Title>
                   <Tag color={categoryColors[recipe.category]} className="recipe-tag">
-                    {recipe.category}
+                    {displayRecipe.category}
                   </Tag>
                   <div className="recipe-card-info">
                     <Text type="secondary">🔥 {recipe.calories} kcal</Text>
-                    <Text type="secondary">⏰ {recipe.time}分钟</Text>
+                    <Text type="secondary">⏰ {recipe.time} {language === 'zh' ? '分钟' : 'min'}</Text>
                   </div>
                 </Card>
               </Col>
@@ -195,7 +202,7 @@ function RecipesPage(): JSX.Element {
           selectedRecipe?.category === '西式' ? ' recipe-modal-western' : ''
         }`}
       >
-        {selectedRecipe && (
+        {selectedRecipe && localizedSelectedRecipe && (
           <div
             className={`recipe-detail${
               selectedRecipe.category === '西式' ? ' recipe-detail-western' : ''
@@ -204,24 +211,24 @@ function RecipesPage(): JSX.Element {
             <div className="recipe-detail-header">
               <span className="recipe-detail-emoji">{selectedRecipe.emoji || '🍽️'}</span>
               <Title level={3} className="recipe-detail-title">
-                {selectedRecipe.name}
+                {localizedSelectedRecipe.name}
                 {newRecipeIds.has(selectedRecipe.id) && (
                   <span className="recipe-detail-new-badge">NEW</span>
                 )}
               </Title>
               <div className="recipe-detail-meta">
                 <Tag color={categoryColors[selectedRecipe.category]}>
-                  {selectedRecipe.category}
+                  {localizedSelectedRecipe.category}
                 </Tag>
                 <Text type="secondary">🔥 {selectedRecipe.calories} kcal</Text>
-                <Text type="secondary">⏰ {selectedRecipe.time}分钟</Text>
+                <Text type="secondary">⏰ {selectedRecipe.time} {language === 'zh' ? '分钟' : 'min'}</Text>
               </div>
             </div>
 
             <div className="recipe-section">
-              <Title level={5}>🥬 食材</Title>
+              <Title level={5}>🥬 {t('recipes.ingredients')}</Title>
               <div className="ingredient-list">
-                {selectedRecipe.ingredients.map((ing, i) => (
+                {localizedSelectedRecipe.ingredients.map((ing, i) => (
                   <Tag key={i} className="ingredient-tag">
                     {ing.name} {ing.amount}
                   </Tag>
@@ -230,9 +237,9 @@ function RecipesPage(): JSX.Element {
             </div>
 
             <div className="recipe-section">
-              <Title level={5}>👩‍🍳 做法</Title>
+              <Title level={5}>👩‍🍳 {t('recipes.steps')}</Title>
               <List
-                dataSource={selectedRecipe.steps}
+                dataSource={localizedSelectedRecipe.steps}
                 renderItem={(step, index) => (
                   <List.Item className="step-item">
                     <span className="step-num">{index + 1}</span>
@@ -243,29 +250,29 @@ function RecipesPage(): JSX.Element {
             </div>
 
             <div className="recipe-section nutrition-section">
-              <Title level={5}>📊 营养信息（估算）</Title>
+              <Title level={5}>📊 {t('recipes.nutrition')}</Title>
               <Row gutter={16}>
                 <Col span={6}>
                   <div className="nutrition-item">
-                    <Text type="secondary">卡路里</Text>
+                    <Text type="secondary">{t('recipes.calories')}</Text>
                     <Text strong>{selectedRecipe.calories} kcal</Text>
                   </div>
                 </Col>
                 <Col span={6}>
                   <div className="nutrition-item">
-                    <Text type="secondary">蛋白质</Text>
+                    <Text type="secondary">{t('recipes.protein')}</Text>
                     <Text strong>{selectedRecipe.nutrition.protein}g</Text>
                   </div>
                 </Col>
                 <Col span={6}>
                   <div className="nutrition-item">
-                    <Text type="secondary">碳水</Text>
+                    <Text type="secondary">{t('recipes.carbs')}</Text>
                     <Text strong>{selectedRecipe.nutrition.carbs}g</Text>
                   </div>
                 </Col>
                 <Col span={6}>
                   <div className="nutrition-item">
-                    <Text type="secondary">脂肪</Text>
+                    <Text type="secondary">{t('recipes.fat')}</Text>
                     <Text strong>{selectedRecipe.nutrition.fat}g</Text>
                   </div>
                 </Col>

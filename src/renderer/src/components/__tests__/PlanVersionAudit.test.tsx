@@ -65,17 +65,17 @@ describe('PlanVersionAudit', () => {
 
   it('displays the card title', () => {
     render(<PlanVersionAudit plans={mockPlans} />)
-    expect(screen.getByText('计划版本审计')).toBeInTheDocument()
+    expect(screen.getByText('Plan Version Audit')).toBeInTheDocument()
   })
 
   it('displays plan version count', () => {
     render(<PlanVersionAudit plans={mockPlans} />)
-    expect(screen.getByText(/共 2 版/)).toBeInTheDocument()
+    expect(screen.getByText(/2 versions/)).toBeInTheDocument()
   })
 
   it('shows empty state when no plans', () => {
     render(<PlanVersionAudit plans={[]} />)
-    expect(screen.getByText('还没有可审计的计划版本')).toBeInTheDocument()
+    expect(screen.getByText('No auditable plan versions yet')).toBeInTheDocument()
   })
 
   it('handles clicking a version item without throwing', async () => {

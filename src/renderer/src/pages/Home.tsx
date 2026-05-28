@@ -34,13 +34,23 @@ import {
   PLANNING_UPDATED_EVENT,
   SETTINGS_UPDATED_EVENT,
 } from '../stores/events'
+import { useI18n } from '../i18n'
 import { getPlanningProgress, summarizePlanningProfile } from '../planning/engine'
 import './Home.css'
 
 const { Title, Text, Paragraph } = Typography
 
-function getGreeting(): string {
+function getGreeting(language: 'en' | 'zh'): string {
   const hour = new Date().getHours()
+  if (language === 'en') {
+    if (hour < 6) return 'It’s late. Time to wind down.'
+    if (hour < 9) return 'Good morning! What sounds good for breakfast?'
+    if (hour < 11) return 'Good morning! Remember to drink some water.'
+    if (hour < 13) return 'Lunch time. Let’s keep it steady.'
+    if (hour < 17) return 'Good afternoon. A light snack can help.'
+    if (hour < 19) return 'Dinner time. Let’s make it balanced.'
+    return 'Good evening. Tomorrow can be another steady day.'
+  }
   if (hour < 6) return '夜深了，猫猫虫要睡觉啦 🌙'
   if (hour < 9) return '早上好呀！今天想吃什么早餐呢？🌅'
   if (hour < 11) return '上午好！记得喝杯水哦 💧'
@@ -50,12 +60,12 @@ function getGreeting(): string {
   return '晚上好～明天也要好好吃饭哦 🌟'
 }
 
-function formatTimestamp(value?: string): string {
+function formatTimestamp(value: string | undefined, language: 'en' | 'zh'): string {
   if (!value) {
-    return '尚未保存'
+    return language === 'zh' ? '尚未保存' : 'Not saved yet'
   }
 
-  return new Date(value).toLocaleString('zh-CN')
+  return new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')
 }
 
 function getTodayDateString(): string {
@@ -67,6 +77,17 @@ function getCurrentMealType(): 'breakfast' | 'lunch' | 'dinner' {
   if (hour < 10) return 'breakfast'
   if (hour < 15) return 'lunch'
   return 'dinner'
+}
+
+function getMealTypeLabel(mealType: string, language: 'en' | 'zh'): string {
+  const labels = {
+    breakfast: language === 'zh' ? '早餐' : 'Breakfast',
+    lunch: language === 'zh' ? '午餐' : 'Lunch',
+    dinner: language === 'zh' ? '晚餐' : 'Dinner',
+    snack: language === 'zh' ? '加餐' : 'Snack',
+  }
+
+  return labels[mealType as keyof typeof labels] ?? mealType
 }
 
 function getAdjustmentTagColor(adjustment: DailyPlanAdjustment): string {
@@ -89,20 +110,24 @@ function getAdjustmentTagColor(adjustment: DailyPlanAdjustment): string {
   return 'processing'
 }
 
-function getAdjustmentStatusText(adjustment: DailyPlanAdjustment): string {
+function getAdjustmentStatusText(adjustment: DailyPlanAdjustment, language: 'en' | 'zh'): string {
   if (adjustment.userResponse === 'accepted') {
-    return '已采纳'
+    return language === 'zh' ? '已采纳' : 'Accepted'
   }
 
   if (adjustment.userResponse === 'dismissed') {
-    return '已忽略'
+    return language === 'zh' ? '已忽略' : 'Dismissed'
   }
 
   if (adjustment.userResponse === 'snoozed') {
-    return '稍后提醒'
+    return language === 'zh' ? '稍后提醒' : 'Snoozed'
   }
 
-  return adjustment.suggestionType === 'supplement' ? '建议补充' : '建议收敛'
+  if (language === 'zh') {
+    return adjustment.suggestionType === 'supplement' ? '建议补充' : '建议收敛'
+  }
+
+  return adjustment.suggestionType === 'supplement' ? 'Add something' : 'Scale back'
 }
 
 function getPlanningActionLabel(params: {
@@ -111,28 +136,47 @@ function getPlanningActionLabel(params: {
   progressPercent: number
   completedCount: number
   totalCount: number
+  language: 'en' | 'zh'
 }): string {
+  const labels = params.language === 'zh'
+    ? {
+        continuePlan: '继续制定计划',
+        continueProfile: '继续完善资料',
+        rebuildPlan: '重新制定计划',
+        reconfirmProfile: '重新确认档案',
+        startPlan: '开始制定计划',
+      }
+    : {
+        continuePlan: 'Continue planning',
+        continueProfile: 'Continue profile',
+        rebuildPlan: 'Rebuild plan',
+        reconfirmProfile: 'Review profile',
+        startPlan: 'Start planning',
+      }
+
   if (params.activeSession) {
-    return '继续制定计划'
+    return labels.continuePlan
   }
 
   if (params.completedCount > 0 && params.completedCount < params.totalCount) {
-    return '继续完善资料'
+    return labels.continueProfile
   }
 
   if (params.latestPlan) {
-    return '重新制定计划'
+    return labels.rebuildPlan
   }
 
   if (params.progressPercent >= 100) {
-    return '重新确认档案'
+    return labels.reconfirmProfile
   }
 
-  return '开始制定计划'
+  return labels.startPlan
 }
 
 function HomePage(): JSX.Element {
-  const [nickname, setNickname] = useState('小可爱')
+  const { language, t } = useI18n()
+  const l = (zh: string, en: string): string => language === 'zh' ? zh : en
+  const [nickname, setNickname] = useState(t('home.defaultNickname'))
   const [todayLog, setTodayLog] = useState<DietLog | null>(null)
   const [planningProfile, setPlanningProfile] = useState<PlanningProfile | null>(null)
   const [activePlanningSession, setActivePlanningSession] = useState<PlanningSession | null>(null)
@@ -158,7 +202,7 @@ function HomePage(): JSX.Element {
         return
       }
 
-      setNickname(settings.nickname || '小可爱')
+      setNickname(settings.nickname || t('home.defaultNickname'))
       setTodayLog(getTodayLog())
       setPlanningProfile(profile)
       setActivePlanningSession(activeSession)
@@ -182,7 +226,7 @@ function HomePage(): JSX.Element {
       window.removeEventListener(DIET_LOG_UPDATED_EVENT, handleSync)
       window.removeEventListener(PLANNING_UPDATED_EVENT, handleSync)
     }
-  }, [])
+  }, [t])
 
   const nutritionSummary = summarizeDietLog(todayLog)
   const planningProgress = useMemo(
@@ -190,8 +234,8 @@ function HomePage(): JSX.Element {
     [planningProfile, activePlanningSession?.completedStepKeys],
   )
   const profileSummaryItems = useMemo(
-    () => summarizePlanningProfile(planningProfile ?? {}).slice(0, 6),
-    [planningProfile],
+    () => summarizePlanningProfile(planningProfile ?? {}, language).slice(0, 6),
+    [language, planningProfile],
   )
   const planningActionLabel = getPlanningActionLabel({
     activeSession: activePlanningSession,
@@ -199,6 +243,7 @@ function HomePage(): JSX.Element {
     progressPercent: planningProgress.percent,
     completedCount: planningProgress.completedCount,
     totalCount: planningProgress.totalCount,
+    language,
   })
 
   const handleAdjustmentResponse = async (
@@ -212,7 +257,9 @@ function HomePage(): JSX.Element {
     const updatedAdjustment = await updateDailyPlanAdjustmentResponse(adjustment.id, response)
     if (updatedAdjustment) {
       setLatestAdjustment(updatedAdjustment)
-      message.success(response === 'accepted' ? '已记录采纳这条建议。' : '已忽略这条建议。')
+      message.success(language === 'zh'
+        ? response === 'accepted' ? '已记录采纳这条建议。' : '已忽略这条建议。'
+        : response === 'accepted' ? 'Suggestion accepted.' : 'Suggestion dismissed.')
     }
   }
 
@@ -221,9 +268,9 @@ function HomePage(): JSX.Element {
       <div className="welcome-card">
         <div className="welcome-emoji">🐛✨</div>
         <Title level={3} className="welcome-title">
-          {nickname}，{getGreeting()}
+          {language === 'zh' ? `${nickname}，${getGreeting(language)}` : `${getGreeting(language)} ${nickname}`}
         </Title>
-        <Text type="secondary">猫猫虫陪你一起管理饮食，健康每一天~</Text>
+        <Text type="secondary">{t('home.subtitle')}</Text>
       </div>
 
       <OneTapLogger date={getTodayDateString()} mealType={getCurrentMealType()} />
@@ -231,19 +278,18 @@ function HomePage(): JSX.Element {
       <Card className="planning-hero-card" style={{ marginTop: 24 }}>
         <div className="planning-hero-content">
           <div className="planning-hero-main">
-            <Tag color="gold" bordered={false}>主线功能</Tag>
+            <Tag color="gold" bordered={false}>{t('home.mainFeature')}</Tag>
             <Title level={3} className="planning-hero-title">
-              让 AI 一步一步帮你制定专属饮食计划
+              {t('home.planTitle')}
             </Title>
             <Paragraph type="secondary" className="planning-hero-description">
-              从体重、身高、目标到作息偏好，猫猫虫会逐项采集并落到本地数据库。
-              如果数据出现异常或前后不一致，它会继续追问，直到得到可用档案。
+              {t('home.planDescription')}
             </Paragraph>
 
             <div className="planning-hero-badges">
-              <span className="planning-badge">本地落库</span>
-              <span className="planning-badge">异常追问</span>
-              <span className="planning-badge">阶段可审计</span>
+              <span className="planning-badge">{t('home.localData')}</span>
+              <span className="planning-badge">{t('home.followUps')}</span>
+              <span className="planning-badge">{t('home.audit')}</span>
             </div>
 
             <div className="planning-hero-actions">
@@ -256,23 +302,29 @@ function HomePage(): JSX.Element {
                 {planningActionLabel}
               </Button>
               <Text type="secondary">
-                当前已确认 {planningProgress.completedCount}/{planningProgress.totalCount} 项资料
+                {language === 'zh'
+                  ? `当前已确认 ${planningProgress.completedCount}/${planningProgress.totalCount} 项资料`
+                  : `${planningProgress.completedCount}/${planningProgress.totalCount} profile items confirmed`}
               </Text>
             </div>
           </div>
 
           <div className="planning-hero-side">
             <div className="planning-metric-box">
-              <Text type="secondary">资料完成度</Text>
+              <Text type="secondary">{language === 'zh' ? '资料完成度' : 'Profile complete'}</Text>
               <strong>{planningProgress.percent}%</strong>
             </div>
             <div className="planning-metric-box">
-              <Text type="secondary">待确认异常</Text>
+              <Text type="secondary">{language === 'zh' ? '待确认异常' : 'Follow-ups'}</Text>
               <strong>{activePlanningSession?.pendingFollowUps?.length ?? 0}</strong>
             </div>
             <div className="planning-metric-box">
-              <Text type="secondary">最近保存</Text>
-              <strong>{activePlanningSession ? formatTimestamp(activePlanningSession.updatedAt) : '暂无进行中会话'}</strong>
+              <Text type="secondary">{language === 'zh' ? '最近保存' : 'Last saved'}</Text>
+              <strong>
+                {activePlanningSession
+                  ? formatTimestamp(activePlanningSession.updatedAt, language)
+                  : language === 'zh' ? '暂无进行中会话' : 'No active session'}
+              </strong>
             </div>
           </div>
         </div>
@@ -284,24 +336,26 @@ function HomePage(): JSX.Element {
             <div className="dynamic-plan-main">
               <div className="dynamic-plan-head">
                 <Tag color={getAdjustmentTagColor(latestAdjustment)} bordered={false}>
-                  {getAdjustmentStatusText(latestAdjustment)}
+                  {getAdjustmentStatusText(latestAdjustment, language)}
                 </Tag>
                 <Text type="secondary">
                   {latestAdjustment.mealType
-                    ? `${latestAdjustment.mealType === 'breakfast' ? '早餐' : latestAdjustment.mealType === 'lunch' ? '午餐' : latestAdjustment.mealType === 'dinner' ? '晚餐' : '加餐'}动态建议`
-                    : '今日动态建议'}
+                    ? language === 'zh'
+                      ? `${getMealTypeLabel(latestAdjustment.mealType, language)}动态建议`
+                      : `${getMealTypeLabel(latestAdjustment.mealType, language)} adjustment`
+                    : l('今日动态建议', 'Today’s dynamic suggestion')}
                 </Text>
               </div>
               <Title level={5} className="dynamic-plan-title">
-                猫猫虫发现今天的计划节奏有变化
+                {l('猫猫虫发现今天的计划节奏有变化', 'Diet Agent found a shift in today’s plan rhythm')}
               </Title>
               <Paragraph className="dynamic-plan-text">
                 {latestAdjustment.suggestionText}
               </Paragraph>
               <div className="dynamic-plan-meta">
-                <span>计划 {latestAdjustment.plannedCalories} kcal</span>
-                <span>实际 {latestAdjustment.actualCalories} kcal</span>
-                <span>差值 {latestAdjustment.deltaCalories > 0 ? '+' : ''}{latestAdjustment.deltaCalories} kcal</span>
+                <span>{l('计划', 'Planned')} {latestAdjustment.plannedCalories} kcal</span>
+                <span>{l('实际', 'Actual')} {latestAdjustment.actualCalories} kcal</span>
+                <span>{l('差值', 'Delta')} {latestAdjustment.deltaCalories > 0 ? '+' : ''}{latestAdjustment.deltaCalories} kcal</span>
               </div>
             </div>
 
@@ -311,10 +365,10 @@ function HomePage(): JSX.Element {
                   type="primary"
                   onClick={() => void handleAdjustmentResponse(latestAdjustment, 'accepted')}
                 >
-                  采纳
+                  {l('采纳', 'Accept')}
                 </Button>
                 <Button onClick={() => void handleAdjustmentResponse(latestAdjustment, 'dismissed')}>
-                  忽略
+                  {l('忽略', 'Dismiss')}
                 </Button>
               </div>
             )}
@@ -326,7 +380,7 @@ function HomePage(): JSX.Element {
         <Col xs={24} md={8}>
           <Card className="stat-card stat-card-pink" hoverable>
             <Statistic
-              title="🔥 今日卡路里"
+              title={`🔥 ${t('home.caloriesToday')}`}
               value={nutritionSummary.calories}
               suffix="kcal"
               prefix={<FireOutlined />}
@@ -336,9 +390,9 @@ function HomePage(): JSX.Element {
         <Col xs={24} md={8}>
           <Card className="stat-card stat-card-mint" hoverable>
             <Statistic
-              title="🍽️ 今日已记录"
+              title={`🍽️ ${t('home.mealsLoggedToday')}`}
               value={nutritionSummary.mealCount}
-              suffix="餐"
+              suffix={l('餐', 'meals')}
               prefix={<CoffeeOutlined />}
             />
           </Card>
@@ -346,9 +400,9 @@ function HomePage(): JSX.Element {
         <Col xs={24} md={8}>
           <Card className="stat-card stat-card-lavender" hoverable>
             <Statistic
-              title="📖 可用菜谱"
+              title={`📖 ${t('home.availableRecipes')}`}
               value={recipes.length}
-              suffix="道"
+              suffix={l('道', 'recipes')}
               prefix={<BookOutlined />}
             />
           </Card>
@@ -357,25 +411,25 @@ function HomePage(): JSX.Element {
 
       <Row gutter={[20, 20]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={11}>
-          <Card className="planning-detail-card" title="当前档案状态">
+          <Card className="planning-detail-card" title={l('当前档案状态', 'Current profile status')}>
             <div className="planning-status-tags">
               {activePlanningSession ? (
                 <Tag color="processing" icon={<ClockCircleOutlined />} bordered={false}>
-                  有一轮正在采集中
+                  {l('有一轮正在采集中', 'A planning session is in progress')}
                 </Tag>
               ) : (
                 <Tag color="default" icon={<ClockCircleOutlined />} bordered={false}>
-                  当前没有进行中的采集
+                  {l('当前没有进行中的采集', 'No active planning session')}
                 </Tag>
               )}
               {planningProgress.completedCount > 0 && (
                 <Tag color="success" icon={<CheckCircleOutlined />} bordered={false}>
-                  已保存到本地数据库
+                  {l('已保存到本地数据库', 'Saved locally')}
                 </Tag>
               )}
               {(activePlanningSession?.pendingFollowUps?.length ?? 0) > 0 && (
                 <Tag color="warning" icon={<ExclamationCircleOutlined />} bordered={false}>
-                  {activePlanningSession?.pendingFollowUps.length} 项异常待确认
+                  {activePlanningSession?.pendingFollowUps.length} {l('项异常待确认', 'follow-ups need confirmation')}
                 </Tag>
               )}
             </div>
@@ -391,41 +445,41 @@ function HomePage(): JSX.Element {
               </div>
             ) : (
               <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                还没有建立用户档案。点击上方主线入口后，猫猫虫会从年龄、身高、体重开始逐步问你。
+                {l('还没有建立用户档案。点击上方主线入口后，猫猫虫会从年龄、身高、体重开始逐步问你。', 'No profile yet. Use the main planning entry above and Diet Agent will ask for age, height, weight, and other basics step by step.')}
               </Paragraph>
             )}
           </Card>
         </Col>
 
         <Col xs={24} lg={13}>
-          <Card className="planning-detail-card" title="最新专属计划">
+          <Card className="planning-detail-card" title={l('最新专属计划', 'Latest personal plan')}>
             {latestPlan ? (
               <div className="latest-plan-panel">
                 <div className="latest-plan-head">
                   <div>
                     <Title level={5} style={{ marginBottom: 4 }}>{latestPlan.title}</Title>
-                    <Text type="secondary">生成时间：{formatTimestamp(latestPlan.createdAt)}</Text>
+                    <Text type="secondary">{l('生成时间', 'Generated')}: {formatTimestamp(latestPlan.createdAt, language)}</Text>
                   </div>
                   <Tag color={latestPlan.generationMode === 'ai' ? 'success' : 'default'} bordered={false}>
-                    {latestPlan.generationMode === 'ai' ? '模型生成' : '本地模板'}
+                    {latestPlan.generationMode === 'ai' ? l('模型生成', 'AI generated') : l('本地模板', 'Local template')}
                   </Tag>
                 </div>
 
                 <div className="latest-plan-metrics">
                   <div className="latest-plan-metric">
-                    <Text type="secondary">热量</Text>
+                    <Text type="secondary">{l('热量', 'Calories')}</Text>
                     <strong>{latestPlan.dailyCalorieTarget} kcal</strong>
                   </div>
                   <div className="latest-plan-metric">
-                    <Text type="secondary">蛋白质</Text>
+                    <Text type="secondary">{l('蛋白质', 'Protein')}</Text>
                     <strong>{latestPlan.proteinTarget} g</strong>
                   </div>
                   <div className="latest-plan-metric">
-                    <Text type="secondary">碳水</Text>
+                    <Text type="secondary">{l('碳水', 'Carbs')}</Text>
                     <strong>{latestPlan.carbsTarget} g</strong>
                   </div>
                   <div className="latest-plan-metric">
-                    <Text type="secondary">脂肪</Text>
+                    <Text type="secondary">{l('脂肪', 'Fat')}</Text>
                     <strong>{latestPlan.fatTarget} g</strong>
                   </div>
                 </div>
@@ -443,7 +497,7 @@ function HomePage(): JSX.Element {
               </div>
             ) : (
               <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                还没有生成专属计划。完成首页主线采集后，这里会展示最新的热量目标、宏量营养建议和执行提醒。
+                {l('还没有生成专属计划。完成首页主线采集后，这里会展示最新的热量目标、宏量营养建议和执行提醒。', 'No personal plan yet. After the main planning flow is complete, calorie targets, macro advice, and reminders will appear here.')}
               </Paragraph>
             )}
           </Card>
@@ -460,10 +514,10 @@ function HomePage(): JSX.Element {
         <div className="tip-content">
           <span className="tip-emoji">🐾</span>
           <div>
-            <Text strong>猫猫虫小贴士</Text>
+            <Text strong>{l('猫猫虫小贴士', 'Diet Agent tip')}</Text>
             <br />
             <Text type="secondary">
-              饮食计划先求稳定，再求完美。先把真实资料录完整，再慢慢微调，执行起来会更稳。
+              {l('饮食计划先求稳定，再求完美。先把真实资料录完整，再慢慢微调，执行起来会更稳。', 'Start with a steady plan before chasing perfection. Capture real details first, then tune gradually.')}
             </Text>
           </div>
         </div>

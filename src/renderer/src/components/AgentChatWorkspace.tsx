@@ -20,6 +20,7 @@ import {
 import { runPostChatMemoryExtraction } from '../memory/postChatExtraction'
 import { getSettings } from '../stores/settings'
 import { SETTINGS_UPDATED_EVENT, CHAT_HISTORY_UPDATED_EVENT, type ChatHistoryUpdatedDetail } from '../stores/events'
+import { useI18n } from '../i18n'
 import './AgentChat.css'
 
 const { Text, Title } = Typography
@@ -57,66 +58,6 @@ interface QuickAction {
   content: string
 }
 
-const quickActions: QuickAction[] = [
-  {
-    key: 'lunch',
-    label: '☀️ 记录午餐',
-    type: 'prefill',
-    content: '我今天午餐吃了',
-  },
-  {
-    key: 'dinner',
-    label: '🌙 记录晚餐',
-    type: 'prefill',
-    content: '我今天晚餐吃了',
-  },
-  {
-    key: 'recommend',
-    label: '🍳 推荐菜谱',
-    type: 'send',
-    content: '帮我推荐一道适合今天吃的菜谱吧',
-  },
-  {
-    key: 'stats',
-    label: '📊 今日统计',
-    type: 'send',
-    content: '我今天吃了多少卡路里？',
-  },
-  {
-    key: 'estimate-custom-food',
-    label: '🥣 估算库外食物',
-    type: 'prefill',
-    content: '我刚刚吃了一个菜谱库里没有的食物，请帮我估算份量、热量和宏量营养，并记录到今天的饮食里：',
-  },
-]
-
-const onboardingActions: QuickAction[] = [
-  {
-    key: 'onboard-log',
-    label: '记录今天吃了什么',
-    type: 'prefill',
-    content: '我今天早餐吃了',
-  },
-  {
-    key: 'onboard-gap',
-    label: '检查今日计划偏差',
-    type: 'send',
-    content: '帮我检查今天的饮食计划有没有偏差，并给出下午或晚餐建议。',
-  },
-  {
-    key: 'onboard-memory',
-    label: '让 Agent 记住偏好',
-    type: 'prefill',
-    content: '请记住我不吃',
-  },
-  {
-    key: 'onboard-knowledge',
-    label: '查食物营养',
-    type: 'send',
-    content: '帮我查一下鸡胸肉和米饭的大致营养，并推荐一个低脂搭配。',
-  },
-]
-
 function createMessage(kind: ChatMessage['kind'], content: string): ChatMessage {
   return {
     id: `${kind}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -126,14 +67,16 @@ function createMessage(kind: ChatMessage['kind'], content: string): ChatMessage 
   }
 }
 
-function createWelcomeMessage(): ChatMessage {
+function createWelcomeMessage(language: 'en' | 'zh'): ChatMessage {
   const settings = getSettings()
-  const nickname = settings.nickname || '小可爱'
+  const nickname = settings.nickname || (language === 'zh' ? '小可爱' : 'friend')
   const provider = AGENT_PROVIDER_PRESETS[settings.agent.provider]
 
   return createMessage(
     'assistant',
-    `${nickname}，我现在在正式对话页里待命。你可以让我记录饮食、查菜谱、分析营养，或者直接问我今天该怎么吃。当前模型通道：${provider.name}。`,
+    language === 'zh'
+      ? `${nickname}，我现在在正式对话页里待命。你可以让我记录饮食、查菜谱、分析营养，或者直接问我今天该怎么吃。当前模型通道：${provider.name}。`
+      : `${nickname}, I am ready in the full chat page. Ask me to log meals, search recipes, analyze nutrition, or plan what to eat today. Current model provider: ${provider.name}.`,
   )
 }
 
@@ -147,25 +90,90 @@ function toConversationHistory(messages: ChatMessage[]): ConversationTurn[] {
     }))
 }
 
-function initMessages(): ChatMessage[] {
+function initMessages(language: 'en' | 'zh'): ChatMessage[] {
   const saved = loadChatHistory()
   if (saved.length > 0) {
     return saved
   }
 
-  return [createWelcomeMessage()]
+  return [createWelcomeMessage(language)]
 }
 
 function AgentChatWorkspace(): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
+  const { language, t } = useI18n()
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const [inputValue, setInputValue] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>(initMessages)
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initMessages(language))
   const [isSending, setIsSending] = useState(false)
   const [statusLoading, setStatusLoading] = useState(true)
   const [apiConfigured, setApiConfigured] = useState(false)
   const [providerLabel, setProviderLabel] = useState(AGENT_PROVIDER_PRESETS.deepseek.name)
+  const quickActions: QuickAction[] = [
+    {
+      key: 'lunch',
+      label: language === 'zh' ? '☀️ 记录午餐' : '☀️ Log lunch',
+      type: 'prefill',
+      content: language === 'zh' ? '我今天午餐吃了' : 'For lunch today I ate ',
+    },
+    {
+      key: 'dinner',
+      label: language === 'zh' ? '🌙 记录晚餐' : '🌙 Log dinner',
+      type: 'prefill',
+      content: language === 'zh' ? '我今天晚餐吃了' : 'For dinner today I ate ',
+    },
+    {
+      key: 'recommend',
+      label: language === 'zh' ? '🍳 推荐菜谱' : '🍳 Recommend recipe',
+      type: 'send',
+      content: language === 'zh' ? '帮我推荐一道适合今天吃的菜谱吧' : 'Recommend a recipe that fits today.',
+    },
+    {
+      key: 'stats',
+      label: language === 'zh' ? '📊 今日统计' : '📊 Today’s stats',
+      type: 'send',
+      content: language === 'zh' ? '我今天吃了多少卡路里？' : 'How many calories have I eaten today?',
+    },
+    {
+      key: 'estimate-custom-food',
+      label: language === 'zh' ? '🥣 估算库外食物' : '🥣 Estimate custom food',
+      type: 'prefill',
+      content: language === 'zh'
+        ? '我刚刚吃了一个菜谱库里没有的食物，请帮我估算份量、热量和宏量营养，并记录到今天的饮食里：'
+        : 'I just ate something that is not in the recipe library. Please estimate the portion, calories, macros, and log it for today: ',
+    },
+  ]
+  const onboardingActions: QuickAction[] = [
+    {
+      key: 'onboard-log',
+      label: language === 'zh' ? '记录今天吃了什么' : 'Log what I ate',
+      type: 'prefill',
+      content: language === 'zh' ? '我今天早餐吃了' : 'For breakfast today I ate ',
+    },
+    {
+      key: 'onboard-gap',
+      label: language === 'zh' ? '检查今日计划偏差' : 'Check today’s plan gap',
+      type: 'send',
+      content: language === 'zh'
+        ? '帮我检查今天的饮食计划有没有偏差，并给出下午或晚餐建议。'
+        : 'Check whether today’s diet plan is off track and suggest what to do for the next meal.',
+    },
+    {
+      key: 'onboard-memory',
+      label: language === 'zh' ? '让 Agent 记住偏好' : 'Save a preference',
+      type: 'prefill',
+      content: language === 'zh' ? '请记住我不吃' : 'Please remember that I do not eat ',
+    },
+    {
+      key: 'onboard-knowledge',
+      label: language === 'zh' ? '查食物营养' : 'Look up nutrition',
+      type: 'send',
+      content: language === 'zh'
+        ? '帮我查一下鸡胸肉和米饭的大致营养，并推荐一个低脂搭配。'
+        : 'Look up the approximate nutrition for chicken breast and rice, then recommend a low-fat pairing.',
+    },
+  ]
 
   // 每次消息变更时持久化到 localStorage
   const isInitialRender = useRef(true)
@@ -243,14 +251,14 @@ function AgentChatWorkspace(): JSX.Element {
 
   const handleClearHistory = (): void => {
     Modal.confirm({
-      title: '清空对话记录',
-      content: '确定要清空所有对话历史吗？清空后无法恢复哦~',
-      okText: '清空',
-      cancelText: '取消',
+      title: language === 'zh' ? '清空对话记录' : 'Clear chat history',
+      content: language === 'zh' ? '确定要清空所有对话历史吗？清空后无法恢复哦~' : 'Clear all chat history? This cannot be undone.',
+      okText: t('common.clear'),
+      cancelText: t('common.cancel'),
       okButtonProps: { danger: true },
       onOk: () => {
         clearChatHistory()
-        setMessages([createWelcomeMessage()])
+        setMessages([createWelcomeMessage(language)])
       },
     })
   }
@@ -271,11 +279,11 @@ function AgentChatWorkspace(): JSX.Element {
     try {
       const apiStatus = await window.agent.getApiKeyStatus(settings.agent.provider)
       if (!apiStatus.configured) {
-        throw new Error('还没有配置当前模型通道的 API Key，先去设置页填一下吧。')
+        throw new Error(language === 'zh' ? '还没有配置当前模型通道的 API Key，先去设置页填一下吧。' : 'The current model provider has no API key yet. Please add one in Settings.')
       }
 
       if (!settings.agent.apiBaseUrl.trim() || !settings.agent.model.trim()) {
-        throw new Error('模型或 Base URL 还没填好，先去设置页补一下配置。')
+        throw new Error(language === 'zh' ? '模型或 Base URL 还没填好，先去设置页补一下配置。' : 'The model or Base URL is missing. Please finish the provider setup in Settings.')
       }
 
       const result = await runAgentConversation({
@@ -298,8 +306,8 @@ function AgentChatWorkspace(): JSX.Element {
         console.error('postChatMemoryExtraction failed', error)
       })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '发生了一个未知错误。'
-      appendMessage(createMessage('assistant', `喵呜，刚刚没处理成功：${errorMessage}`))
+      const errorMessage = error instanceof Error ? error.message : (language === 'zh' ? '发生了一个未知错误。' : 'An unknown error occurred.')
+      appendMessage(createMessage('assistant', language === 'zh' ? `喵呜，刚刚没处理成功：${errorMessage}` : `Sorry, I could not complete that: ${errorMessage}`))
     } finally {
       setIsSending(false)
       setStatusLoading(false)
@@ -330,34 +338,34 @@ function AgentChatWorkspace(): JSX.Element {
           <div className="agent-chat-avatar">🐛</div>
           <div>
             <Title level={5} style={{ margin: 0 }}>
-              猫猫虫 AI 对话
+              {t('agent.workspaceTitle')}
             </Title>
             <Text type="secondary">
               {providerLabel}
               {' · '}
-              {statusLoading ? '检查中' : apiConfigured ? '已连接' : '未配置'}
+              {statusLoading ? t('agent.statusChecking') : apiConfigured ? t('agent.statusReady') : t('agent.statusMissing')}
             </Text>
           </div>
         </div>
         <div className="agent-chat-header-actions">
           <Tag color={apiConfigured ? 'success' : 'warning'} bordered={false}>
-            {apiConfigured ? '可对话' : '需配置'}
+            {apiConfigured ? t('agent.canChat') : t('agent.needsSetup')}
           </Tag>
           <Button
             type="text"
             icon={<ClearOutlined />}
             onClick={handleClearHistory}
             disabled={isSending || messages.length <= 1}
-            title="清空对话记录"
+            title={t('agent.clearHistory')}
           >
-            清空
+            {t('common.clear')}
           </Button>
           <Button
             type="text"
             icon={<SettingOutlined />}
             onClick={() => navigate('/settings')}
           >
-            去设置
+            {t('agent.goSettings')}
           </Button>
         </div>
       </div>
@@ -368,9 +376,11 @@ function AgentChatWorkspace(): JSX.Element {
             <div className="agent-chat-onboarding-head">
               <BulbOutlined />
               <div>
-                <Text strong>第一次聊天可以从这里开始</Text>
+                <Text strong>{language === 'zh' ? '第一次聊天可以从这里开始' : 'Start your first chat here'}</Text>
                 <Text type="secondary">
-                  Agent 会优先调用本地工具，不只是聊天：它能记录饮食、看今日偏差、记住长期偏好，也能查菜谱和营养知识。
+                  {language === 'zh'
+                    ? 'Agent 会优先调用本地工具，不只是聊天：它能记录饮食、看今日偏差、记住长期偏好，也能查菜谱和营养知识。'
+                    : 'Diet Agent can use local tools, not just chat: it can log meals, check today’s plan gap, remember long-term preferences, and search recipes or nutrition knowledge.'}
                 </Text>
               </div>
             </div>
@@ -466,13 +476,13 @@ function AgentChatWorkspace(): JSX.Element {
               void handleSubmit(inputValue)
             }
           }}
-          placeholder="比如：我今天午餐吃了番茄炒蛋，或者 帮我推荐一道低卡晚餐"
+          placeholder={t('agent.placeholder')}
           className="agent-chat-input"
           disabled={isSending}
         />
 
         <div className="agent-chat-footer-actions">
-          <Text type="secondary">Shift + Enter 换行</Text>
+          <Text type="secondary">{t('agent.shiftEnter')}</Text>
           <Button
             type="primary"
             icon={<SendOutlined />}
@@ -481,7 +491,7 @@ function AgentChatWorkspace(): JSX.Element {
             disabled={!inputValue.trim()}
             className="agent-chat-send"
           >
-            发送
+            {t('agent.send')}
           </Button>
         </div>
       </div>

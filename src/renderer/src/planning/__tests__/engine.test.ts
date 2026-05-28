@@ -42,6 +42,7 @@ import {
 vi.mock('../../stores/settings', () => ({
   getSettings: vi.fn(() => ({
     nickname: '猫猫',
+    language: 'en',
     agent: { provider: 'deepseek', apiBaseUrl: '', model: '' },
     reminders: {},
   })),
@@ -70,25 +71,29 @@ describe('planning/engine helpers', () => {
     })
 
     it('exposes skip defaults only for optional text steps', () => {
-      expect(getPlanningStepSkipValue('dietPreference')).toBe('无特别偏好')
+      expect(getPlanningStepSkipValue('dietPreference')).toBe('No special preference')
+      expect(getPlanningStepSkipValue('dietPreference', 'zh')).toBe('无特别偏好')
       expect(getPlanningStepSkipValue('age')).toBeUndefined()
     })
   })
 
   describe('validatePlanningAnswer', () => {
     it('rejects out-of-range numeric values', () => {
-      expect(validatePlanningAnswer('age', 7)).toMatch(/不能低于/)
-      expect(validatePlanningAnswer('age', 105)).toMatch(/不能高于/)
+      expect(validatePlanningAnswer('age', 7)).toMatch(/cannot be below/)
+      expect(validatePlanningAnswer('age', 105)).toMatch(/cannot be above/)
+      expect(validatePlanningAnswer('age', 7, 'zh')).toMatch(/不能低于/)
       expect(validatePlanningAnswer('age', 30)).toBeNull()
     })
 
     it('rejects non-numeric values for number steps', () => {
-      expect(validatePlanningAnswer('weightKg', 'heavy')).toMatch(/有效的/)
+      expect(validatePlanningAnswer('weightKg', 'heavy')).toMatch(/valid current weight/)
+      expect(validatePlanningAnswer('weightKg', 'heavy', 'zh')).toMatch(/有效的/)
     })
 
     it('accepts valid choice values and rejects unknown ones', () => {
       expect(validatePlanningAnswer('gender', 'male')).toBeNull()
-      expect(validatePlanningAnswer('gender', 'space-alien')).toMatch(/请选择/)
+      expect(validatePlanningAnswer('gender', 'space-alien')).toMatch(/Please choose/)
+      expect(validatePlanningAnswer('gender', 'space-alien', 'zh')).toMatch(/请选择/)
     })
 
     it('only requires a text answer when the step is non-optional', () => {
@@ -108,10 +113,14 @@ describe('planning/engine helpers', () => {
     })
 
     it('formats answers using human-readable labels', () => {
-      expect(formatPlanningAnswer('age', 30)).toBe('30 岁')
-      expect(formatPlanningAnswer('gender', 'male')).toBe(GENDER_LABELS.male)
-      expect(formatPlanningAnswer('goal', 'lose_fat')).toBe(GOAL_LABELS.lose_fat)
-      expect(formatPlanningAnswer('activityLevel', 'high')).toBe(
+      expect(formatPlanningAnswer('age', 30)).toBe('30 years')
+      expect(formatPlanningAnswer('gender', 'male')).toBe('Male')
+      expect(formatPlanningAnswer('goal', 'lose_fat')).toBe('Fat loss')
+      expect(formatPlanningAnswer('activityLevel', 'high')).toBe('Frequent training')
+      expect(formatPlanningAnswer('age', 30, 'zh')).toBe('30 岁')
+      expect(formatPlanningAnswer('gender', 'male', 'zh')).toBe(GENDER_LABELS.male)
+      expect(formatPlanningAnswer('goal', 'lose_fat', 'zh')).toBe(GOAL_LABELS.lose_fat)
+      expect(formatPlanningAnswer('activityLevel', 'high', 'zh')).toBe(
         ACTIVITY_LEVEL_LABELS.high,
       )
     })
@@ -145,12 +154,14 @@ describe('planning/engine helpers', () => {
   describe('buildPlanningPrompt', () => {
     it('uses the step prompt when no value exists', () => {
       const prompt = buildPlanningPrompt('age', {})
-      expect(prompt).toContain('年龄')
+      expect(prompt).toContain('age')
+      expect(buildPlanningPrompt('age', {}, 'zh')).toContain('年龄')
     })
 
     it('produces a confirmation prompt when a value already exists', () => {
       const prompt = buildPlanningPrompt('age', { age: 30 })
-      expect(prompt).toContain('30 岁')
+      expect(prompt).toContain('30 years')
+      expect(buildPlanningPrompt('age', { age: 30 }, 'zh')).toContain('30 岁')
     })
   })
 
@@ -186,7 +197,8 @@ describe('planning/engine helpers', () => {
     })
 
     it('joins with a Chinese semicolon when both have content', () => {
-      expect(mergePlanningNote('原有', '新增')).toBe('原有；新增')
+      expect(mergePlanningNote('existing', 'new')).toBe('existing; new')
+      expect(mergePlanningNote('原有', '新增', 'zh')).toBe('原有；新增')
     })
   })
 
@@ -194,7 +206,8 @@ describe('planning/engine helpers', () => {
     it('skips fields that are not set', () => {
       expect(summarizePlanningProfile({})).toEqual([])
       const partial = summarizePlanningProfile({ age: 30 })
-      expect(partial).toContainEqual({ label: '年龄', value: '30 岁' })
+      expect(partial).toContainEqual({ label: 'Age', value: '30 years' })
+      expect(summarizePlanningProfile({ age: 30 }, 'zh')).toContainEqual({ label: '年龄', value: '30 岁' })
     })
   })
 
@@ -209,12 +222,18 @@ describe('planning/engine helpers', () => {
   })
 
   describe('getPlanGenerationLabel', () => {
-    it('reports model-name for AI plans and "本地模板" for local ones', () => {
+    it('reports model-name for AI plans and local-template labels', () => {
       expect(
         getPlanGenerationLabel({ generationMode: 'ai', generatedWithModel: 'gpt' }),
-      ).toBe('模型生成 · gpt')
+      ).toBe('AI generated · gpt')
       expect(
         getPlanGenerationLabel({ generationMode: 'local' }),
+      ).toBe('Local template')
+      expect(
+        getPlanGenerationLabel({ generationMode: 'ai', generatedWithModel: 'gpt' }, 'zh'),
+      ).toBe('模型生成 · gpt')
+      expect(
+        getPlanGenerationLabel({ generationMode: 'local' }, 'zh'),
       ).toBe('本地模板')
     })
   })

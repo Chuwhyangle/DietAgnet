@@ -75,19 +75,19 @@ describe('OneTapLogger', () => {
 
   it('displays the quick-log header', () => {
     render(<OneTapLogger date="2024-01-15" mealType="lunch" />)
-    expect(screen.getByText('⚡ 快速记录')).toBeInTheDocument()
+    expect(screen.getByText(/Quick Log/)).toBeInTheDocument()
   })
 
   it('displays the photo button', () => {
     render(<OneTapLogger date="2024-01-15" mealType="lunch" />)
-    expect(screen.getByRole('button', { name: /拍照/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Photo/ })).toBeInTheDocument()
   })
 
   it('handles typing in the text input without throwing', async () => {
     render(<OneTapLogger date="2024-01-15" mealType="lunch" />)
 
     const user = userEvent.setup()
-    const input = screen.getByPlaceholderText(/输入食物/)
+    const input = screen.getByPlaceholderText(/Describe food/)
     await user.type(input, '一碗面条')
     expect(input).toHaveValue('一碗面条')
   })
@@ -98,18 +98,18 @@ describe('OneTapLogger', () => {
     const user = userEvent.setup()
 
     // First interaction: type a food name into the input
-    const input = screen.getByPlaceholderText(/输入食物/)
+    const input = screen.getByPlaceholderText(/Describe food/)
     await user.type(input, '红烧肉')
     expect(input).toHaveValue('红烧肉')
 
-    // Second interaction: click the submit/search button (识别)
-    const submitButton = screen.getByRole('button', { name: /识别/ })
+    // Second interaction: click the submit/search button
+    const submitButton = screen.getByRole('button', { name: /Recognize/ })
     await user.click(submitButton)
 
     // Assert the component didn't crash — the container should still be in the DOM
     // The mock returns { items: [], calories: 0, confidence: 0.9 } which in copilot mode
     // triggers a preview modal (empty items). The input may or may not remain.
     // We just verify no unhandled throw occurred by checking the component root is still present.
-    expect(screen.getByText('⚡ 快速记录')).toBeInTheDocument()
+    expect(screen.getByText(/Quick Log/)).toBeInTheDocument()
   })
 })

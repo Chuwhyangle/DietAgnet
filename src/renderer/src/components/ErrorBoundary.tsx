@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button, Result } from 'antd'
+import { getSettings } from '../stores/settings'
 
 interface Props {
   children: ReactNode
@@ -30,14 +31,17 @@ class ErrorBoundary extends Component<Props, State> {
       return this.props.children
     }
 
+    const language = getSettings().language === 'zh' ? 'zh' : 'en'
+    const l = (zh: string, en: string): string => (language === 'zh' ? zh : en)
+
     return (
       <Result
         status="error"
-        title="页面出了点问题"
-        subTitle={this.state.error?.message ?? '未知错误'}
+        title={l('页面出了点问题', 'Something went wrong')}
+        subTitle={this.state.error?.message ?? l('未知错误', 'Unknown error')}
         extra={
           <Button type="primary" onClick={this.handleReset}>
-            重试
+            {l('重试', 'Try again')}
           </Button>
         }
       />

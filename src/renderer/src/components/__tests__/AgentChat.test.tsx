@@ -51,7 +51,7 @@ describe('AgentChat', () => {
     )
 
     const user = userEvent.setup()
-    const button = screen.getByRole('button', { name: /AI 对话/ })
+    const button = screen.getByRole('button', { name: /AI Chat/ })
     expect(button).toBeInTheDocument()
 
     // Click should navigate (or at least not throw)
@@ -68,12 +68,12 @@ describe('AgentChat', () => {
     const user = userEvent.setup()
 
     // First interaction: click the main launcher button (navigates to /chat)
-    const launcherButton = screen.getByRole('button', { name: /AI 对话/ })
+    const launcherButton = screen.getByRole('button', { name: /AI Chat/ })
     await user.click(launcherButton)
 
     // Second interaction: click the settings button (navigates to /settings)
     // Ant Design renders the button with the icon's aria-label as accessible name
-    const settingsButton = screen.getByTitle('打开设置页')
+    const settingsButton = screen.getByTitle('Settings')
     await user.click(settingsButton)
 
     // Assert the component is still rendered and didn't crash

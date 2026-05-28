@@ -11,6 +11,7 @@ import { Card, Button, Typography, Tag, message } from 'antd'
 import { ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons'
 import { acceptCandidate, skipSuggestionRound } from '../coaching/autopilotPlanner'
 import type { AutopilotSuggestionRound, MealCandidate } from '../coaching/types'
+import { useI18n } from '../i18n'
 import './AutopilotSuggestion.css'
 
 const { Text } = Typography
@@ -34,6 +35,8 @@ function AutopilotSuggestion({
   onAccepted,
   onSkipped,
 }: AutopilotSuggestionProps): JSX.Element {
+  const { language } = useI18n()
+  const l = (zh: string, en: string): string => (language === 'zh' ? zh : en)
   const [loading, setLoading] = useState<string | null>(null) // recipeId or 'skip'
 
   // ---------------------------------------------------------------------------
@@ -45,15 +48,19 @@ function AutopilotSuggestion({
       setLoading(candidate.recipeId)
       try {
         await acceptCandidate(candidate, suggestion.date, suggestion.mealType)
-        message.success(`${candidate.emoji || '🍽️'} ${candidate.name} 已记录！`)
+        message.success(
+          language === 'zh'
+            ? `${candidate.emoji || '🍽️'} ${candidate.name} 已记录！`
+            : `${candidate.emoji || '🍽️'} ${candidate.name} logged.`,
+        )
         onAccepted?.()
       } catch (err) {
-        message.error('记录失败，请重试')
+        message.error(l('记录失败，请重试', 'Failed to log. Please try again.'))
       } finally {
         setLoading(null)
       }
     },
-    [suggestion.date, suggestion.mealType, onAccepted],
+    [language, l, suggestion.date, suggestion.mealType, onAccepted],
   )
 
   // ---------------------------------------------------------------------------
@@ -64,14 +71,14 @@ function AutopilotSuggestion({
     setLoading('skip')
     try {
       await skipSuggestionRound(suggestion.date, suggestion.mealType)
-      message.info('已跳过本轮推荐')
+      message.info(l('已跳过本轮推荐', 'Recommendation round skipped.'))
       onSkipped?.()
     } catch (err) {
-      message.error('操作失败，请重试')
+      message.error(l('操作失败，请重试', 'Operation failed. Please try again.'))
     } finally {
       setLoading(null)
     }
-  }, [suggestion.date, suggestion.mealType, onSkipped])
+  }, [l, suggestion.date, suggestion.mealType, onSkipped])
 
   // ---------------------------------------------------------------------------
   // Render
@@ -81,23 +88,23 @@ function AutopilotSuggestion({
     <Card className="autopilot-suggestion" size="small">
       <div className="autopilot-suggestion-header">
         <Text strong>
-          <ThunderboltOutlined /> 今日推荐
+          <ThunderboltOutlined /> {l('今日推荐', 'Today’s Picks')}
         </Text>
         <Tag color="processing" bordered={false}>
           {suggestion.mealType === 'breakfast'
-            ? '早餐'
+            ? l('早餐', 'Breakfast')
             : suggestion.mealType === 'lunch'
-              ? '午餐'
+              ? l('午餐', 'Lunch')
               : suggestion.mealType === 'dinner'
-                ? '晚餐'
-                : '加餐'}
+                ? l('晚餐', 'Dinner')
+                : l('加餐', 'Snack')}
         </Tag>
       </div>
 
       {suggestion.fallback ? (
         <div className="autopilot-suggestion-fallback">
           <Text type="secondary">
-            没有合适的推荐，试试告诉我你有什么食材？
+            {l('没有合适的推荐，试试告诉我你有什么食材？', 'No suitable recommendation yet. Tell me what ingredients you have.')}
           </Text>
         </div>
       ) : (
@@ -131,7 +138,7 @@ function AutopilotSuggestion({
                     disabled={loading !== null}
                     icon={loading === candidate.recipeId ? <LoadingOutlined /> : undefined}
                   >
-                    选这个
+                    {l('选这个', 'Choose this')}
                   </Button>
                 </div>
               </div>
@@ -145,7 +152,7 @@ function AutopilotSuggestion({
               disabled={loading !== null}
               icon={loading === 'skip' ? <LoadingOutlined /> : undefined}
             >
-              跳过本轮
+              {l('跳过本轮', 'Skip this round')}
             </Button>
           </div>
         </>

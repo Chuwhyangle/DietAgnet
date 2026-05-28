@@ -62,7 +62,7 @@ describe('RecipesPage', () => {
         <RecipesPage />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/猫猫虫的菜谱本/)).toBeInTheDocument()
+    expect(screen.getByText(/Recipe Library/)).toBeInTheDocument()
   })
 
   it('handles typing in the search input without throwing', async () => {
@@ -73,7 +73,7 @@ describe('RecipesPage', () => {
     )
 
     const user = userEvent.setup()
-    const searchInput = screen.getByPlaceholderText(/搜索菜名或食材/)
+    const searchInput = screen.getByPlaceholderText(/Search recipes or ingredients/)
     await user.type(searchInput, '番茄')
     expect(searchInput).toHaveValue('番茄')
   })

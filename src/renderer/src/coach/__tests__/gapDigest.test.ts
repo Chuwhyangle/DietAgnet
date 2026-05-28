@@ -40,25 +40,39 @@ describe('coach/gapDigest', () => {
   describe('buildPlanGapDigestPlain', () => {
     it('reports remaining calories when under the daily target', () => {
       const text = buildPlanGapDigestPlain(makeGap())
-      expect(text).toMatch(/^6月15日：/)
-      expect(text).toContain('已记录 1500 kcal')
-      expect(text).toContain('目标 2000 kcal')
-      expect(text).toContain('全天还剩约 500 kcal')
+      expect(text).toMatch(/^Jun 15:/)
+      expect(text).toContain('logged 1500 kcal')
+      expect(text).toContain('target 2000 kcal')
+      expect(text).toContain('about 500 kcal remaining')
+
+      const zhText = buildPlanGapDigestPlain(makeGap(), 'zh')
+      expect(zhText).toMatch(/^6月15日：/)
+      expect(zhText).toContain('已记录 1500 kcal')
     })
 
     it('reports overage when actual calories exceed the daily target', () => {
       const text = buildPlanGapDigestPlain(
         makeGap({ actualCalories: 2300, remainingCalories: -300 }),
       )
-      expect(text).toContain('当前比计划多出约 300 kcal')
-      expect(text).not.toContain('全天还剩约')
+      expect(text).toContain('about 300 kcal above plan')
+      expect(text).not.toContain('remaining for the day')
+
+      const zhText = buildPlanGapDigestPlain(
+        makeGap({ actualCalories: 2300, remainingCalories: -300 }),
+        'zh',
+      )
+      expect(zhText).toContain('当前比计划多出约 300 kcal')
     })
 
     it('treats actual === target as under-budget (no overage branch)', () => {
       const text = buildPlanGapDigestPlain(
         makeGap({ actualCalories: 2000, remainingCalories: 0 }),
       )
-      expect(text).toContain('全天还剩约 0 kcal')
+      expect(text).toContain('about 0 kcal remaining')
+      expect(buildPlanGapDigestPlain(
+        makeGap({ actualCalories: 2000, remainingCalories: 0 }),
+        'zh',
+      )).toContain('全天还剩约 0 kcal')
     })
   })
 
@@ -68,9 +82,17 @@ describe('coach/gapDigest', () => {
         gap: makeGap(),
         suggestion: null,
       })
-      expect(md).toContain('**【饮食快照 · 6月15日】**')
-      expect(md).toContain('节奏与计划接近，继续按平常吃就好。')
-      expect(md).not.toContain('展开建议')
+      expect(md).toContain('**Diet Snapshot · Jun 15**')
+      expect(md).toContain('Your rhythm is close to plan')
+      expect(md).not.toContain('Suggestion details')
+
+      const zhMd = buildCoachDigestMarkdown({
+        gap: makeGap(),
+        suggestion: null,
+        language: 'zh',
+      })
+      expect(zhMd).toContain('**【饮食快照 · 6月15日】**')
+      expect(zhMd).toContain('节奏与计划接近，继续按平常吃就好。')
     })
 
     it('returns the calm note when the suggestion is "maintain"', () => {
@@ -89,8 +111,8 @@ describe('coach/gapDigest', () => {
       } as unknown as DynamicPlanSuggestion
 
       const md = buildCoachDigestMarkdown({ gap: makeGap(), suggestion })
-      expect(md).toContain('节奏与计划接近')
-      expect(md).not.toContain('展开建议')
+      expect(md).toContain('Your rhythm is close to plan')
+      expect(md).not.toContain('Suggestion details')
     })
 
     it('appends the suggestion body and saved-adjustment hint when an id is provided', () => {
@@ -114,9 +136,18 @@ describe('coach/gapDigest', () => {
         savedAdjustmentId: 42,
       })
 
-      expect(md).toContain('展开建议')
+      expect(md).toContain('Suggestion details')
       expect(md).toContain('建议补一份高蛋白餐')
-      expect(md).toContain('建议记录 ID：42')
+      expect(md).toContain('Suggestion ID: 42')
+
+      const zhMd = buildCoachDigestMarkdown({
+        gap: makeGap(),
+        suggestion,
+        savedAdjustmentId: 42,
+        language: 'zh',
+      })
+      expect(zhMd).toContain('展开建议')
+      expect(zhMd).toContain('建议记录 ID：42')
     })
 
     it('appends a "not persisted" hint when no savedAdjustmentId is provided', () => {
@@ -143,8 +174,19 @@ describe('coach/gapDigest', () => {
       })
 
       expect(md).toContain('今晚可以少一份米饭')
-      expect(md).toContain('未写入待确认建议记录')
-      expect(md).not.toContain('建议记录 ID：')
+      expect(md).toContain('not saved as a pending suggestion')
+      expect(md).not.toContain('Suggestion ID:')
+
+      const zhMd = buildCoachDigestMarkdown({
+        gap: makeGap({
+          actualCalories: 2200,
+          remainingCalories: -200,
+        }),
+        suggestion,
+        language: 'zh',
+      })
+      expect(zhMd).toContain('未写入待确认建议记录')
+      expect(zhMd).not.toContain('建议记录 ID：')
     })
   })
 })

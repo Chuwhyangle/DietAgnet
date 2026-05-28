@@ -72,6 +72,22 @@ function seedDietLog(date: string, calories = 180): void {
   localStorage.setItem(`diet-agent-log-${date}`, JSON.stringify(log))
 }
 
+function stripDescriptions(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripDescriptions)
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'description')
+      .map(([key, entry]) => [key, stripDescriptions(entry)]),
+  )
+}
+
 async function seedPlanGapFixture(date = '2024-06-15'): Promise<void> {
   await savePlanningProfile({
     age: 30,
@@ -115,7 +131,7 @@ async function seedPlanGapFixture(date = '2024-06-15'): Promise<void> {
 }
 
 // Import executeToolCall and AGENT_TOOLS after environment is ready
-const { executeToolCall, AGENT_TOOLS } = await import('../tools')
+const { executeToolCall, AGENT_TOOLS, getToolDefinitions } = await import('../tools')
 
 function invoke(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
   const toolCall: AgentToolInvocation = { id: 'test-call-1', name, arguments: args }
@@ -142,11 +158,29 @@ describe('agent/tools - executeToolCall', () => {
       const names = AGENT_TOOLS.map((t) => t.function.name)
       expect(new Set(names).size).toBe(names.length)
     })
+
+    it('localizes descriptions without changing tool names or schemas', () => {
+      const enTools = getToolDefinitions('en')
+      const zhTools = getToolDefinitions('zh')
+
+      expect(enTools.map((tool) => tool.function.name)).toEqual(
+        zhTools.map((tool) => tool.function.name),
+      )
+      expect(enTools.map((tool) => stripDescriptions(tool.function.parameters))).toEqual(
+        zhTools.map((tool) => stripDescriptions(tool.function.parameters)),
+      )
+
+      const enToday = enTools.find((tool) => tool.function.name === 'get_today_nutrition')
+      const zhToday = zhTools.find((tool) => tool.function.name === 'get_today_nutrition')
+      expect(enToday?.function.description).toMatch(/today/i)
+      expect(zhToday?.function.description).toMatch(/今天/)
+      expect(enToday?.function.description).not.toMatch(/[\u3400-\u9fff]/)
+    })
   })
 
   describe('unknown tool', () => {
     it('throws for an unregistered tool name', async () => {
-      await expect(invoke('nonexistent_tool')).rejects.toThrow('未知工具')
+      await expect(invoke('nonexistent_tool')).rejects.toThrow('Unknown tool')
     })
   })
 
@@ -694,7 +728,7 @@ describe('agent/tools - executeToolCall', () => {
         estimatedFat: 8,
         reasoning: '',
         confidence: 0.8,
-      })).rejects.toThrow('估算依据')
+      })).rejects.toThrow('Reasoning')
     })
 
     it('rejects when estimatedCalories is not a number', async () => {

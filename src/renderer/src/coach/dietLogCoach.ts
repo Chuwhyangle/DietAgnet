@@ -67,6 +67,7 @@ async function runDietLogCoach(detail: DietLogUpdatedDetail): Promise<void> {
     gap,
     suggestion: result.suggestion,
     savedAdjustmentId: result.savedAdjustment?.id,
+    language: settings.language,
   })
 
   if (settings.reminders.postLogGapSummaryInChat !== false) {
@@ -82,8 +83,8 @@ async function runDietLogCoach(detail: DietLogUpdatedDetail): Promise<void> {
 
   if (allowDesktop) {
     void window.agent.showNotification({
-      title: '今日饮食与计划',
-      body: buildPlanGapDigestPlain(gap),
+      title: settings.language === 'zh' ? '今日饮食与计划' : 'Today’s Diet and Plan',
+      body: buildPlanGapDigestPlain(gap, settings.language),
       urgency: 'normal',
     }).catch((error) => {
       console.error('dietLogCoach: desktop notification failed', error)

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { AGENT_PROVIDER_PRESETS } from '../../../shared/agent'
 import { SETTINGS_UPDATED_EVENT } from '../stores/events'
 import { getSettings } from '../stores/settings'
+import { useI18n } from '../i18n'
 import './AgentChat.css'
 
 interface AgentChatProps {
@@ -82,6 +83,7 @@ function saveLauncherPosition(position: LauncherPosition): void {
 
 function AgentChat({ hidden = false }: AgentChatProps): JSX.Element {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const dragStateRef = useRef<{
     pointerId: number
     startX: number
@@ -229,21 +231,21 @@ function AgentChat({ hidden = false }: AgentChatProps): JSX.Element {
         className="agent-chat-launcher-button"
         onPointerDown={handlePointerDown}
         onClick={handleOpenChat}
-        title="拖动可移动，点击进入正式 AI 对话页"
+        title={t('agent.launcherTitle')}
       >
-        AI 对话
+        {t('agent.open')}
       </Button>
 
       <div className="agent-chat-launcher-meta">
         <Tag color={apiConfigured ? 'success' : 'warning'} bordered={false}>
-          {statusLoading ? '检查中' : apiConfigured ? providerLabel : '待配置'}
+          {statusLoading ? t('agent.statusChecking') : apiConfigured ? providerLabel : t('agent.statusMissing')}
         </Tag>
         <Button
           type="text"
           icon={<SettingOutlined />}
           className="agent-chat-launcher-settings"
           onClick={() => navigate('/settings')}
-          title="打开设置页"
+          title={t('layout.settings')}
         />
       </div>
     </div>

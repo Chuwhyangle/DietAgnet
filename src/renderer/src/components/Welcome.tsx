@@ -10,6 +10,7 @@ import {
   FormOutlined,
 } from '@ant-design/icons'
 import { getSettings, saveSettings } from '../stores/settings'
+import { useI18n } from '../i18n'
 import './Welcome.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -20,30 +21,30 @@ interface WelcomeProps {
 
 const TOTAL_STEPS = 3
 
-const featureCards = [
-  {
-    icon: <EditOutlined />,
-    color: '#FFB6C1',
-    title: '记录饮食',
-    description: '轻松记录每日三餐和加餐，自动计算卡路里与营养',
-  },
-  {
-    icon: <BookOutlined />,
-    color: '#B8E8D0',
-    title: '浏览菜谱',
-    description: '130 道中西式菜谱随时查看，包含食材、步骤和营养信息',
-  },
-  {
-    icon: <RobotOutlined />,
-    color: '#E8D5F5',
-    title: 'AI 专属计划',
-    description: '猫猫虫逐步采集你的资料，生成个性化饮食建议',
-  },
-]
-
 function Welcome({ onFinish }: WelcomeProps): JSX.Element {
+  const { t } = useI18n()
   const [step, setStep] = useState(0)
   const [nickname, setNickname] = useState('')
+  const featureCards = [
+    {
+      icon: <EditOutlined />,
+      color: '#FFB6C1',
+      title: t('welcome.feature.log.title'),
+      description: t('welcome.feature.log.description'),
+    },
+    {
+      icon: <BookOutlined />,
+      color: '#B8E8D0',
+      title: t('welcome.feature.recipes.title'),
+      description: t('welcome.feature.recipes.description'),
+    },
+    {
+      icon: <RobotOutlined />,
+      color: '#E8D5F5',
+      title: t('welcome.feature.plan.title'),
+      description: t('welcome.feature.plan.description'),
+    },
+  ]
 
   const handleNext = (): void => {
     if (step === 1 && nickname.trim()) {
@@ -104,12 +105,10 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
             </div>
 
             <Title level={2} className="welcome-step-title">
-              你好呀，欢迎来到猫猫虫的小窝！
+              {t('welcome.hello.title')}
             </Title>
             <Paragraph className="welcome-step-description">
-              我是猫猫虫，你的饮食小助手。
-              <br />
-              我会陪你记录每天的饮食，帮你吃得更健康，更开心~
+              {t('welcome.hello.description')}
             </Paragraph>
 
             <Button
@@ -119,7 +118,7 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
               onClick={handleNext}
               className="welcome-main-btn"
             >
-              认识一下
+              {t('welcome.hello.action')}
             </Button>
           </div>
         )}
@@ -131,14 +130,14 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
             </div>
 
             <Title level={3} className="welcome-step-title">
-              猫猫虫该怎么称呼你呢？
+              {t('welcome.nickname.title')}
             </Title>
             <Paragraph className="welcome-step-description">
-              给自己起一个可爱的昵称吧，之后随时可以在设置页修改哦
+              {t('welcome.nickname.description')}
             </Paragraph>
 
             <Input
-              placeholder="输入你的昵称..."
+              placeholder={t('settings.nickname.placeholder')}
               value={nickname}
               onChange={(event) => setNickname(event.target.value)}
               maxLength={20}
@@ -156,10 +155,10 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
                 className="welcome-main-btn"
                 disabled={!nickname.trim()}
               >
-                就叫这个！
+                {t('welcome.nickname.confirm')}
               </Button>
               <Button type="text" onClick={handleNext} className="welcome-skip-link">
-                先跳过，之后再设
+                {t('welcome.nickname.skip')}
               </Button>
             </div>
           </div>
@@ -168,10 +167,10 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
         {step === 2 && (
           <div className="welcome-step welcome-step-features">
             <Title level={3} className="welcome-step-title">
-              猫猫虫能帮你做这些事 🐾
+              {t('welcome.features.title')}
             </Title>
             <Paragraph className="welcome-step-description">
-              三个核心能力，让健康饮食变得简单
+              {t('welcome.features.description')}
             </Paragraph>
 
             <div className="welcome-features-grid">
@@ -202,7 +201,7 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
                 onClick={handleExpressOnboarding}
                 className="welcome-main-btn"
               >
-                一分钟开始减肥
+                {t('welcome.express')}
               </Button>
               <Button
                 type="default"
@@ -211,15 +210,15 @@ function Welcome({ onFinish }: WelcomeProps): JSX.Element {
                 onClick={handleFullOnboarding}
                 className="welcome-secondary-btn"
               >
-                完整问答版
+                {t('welcome.full')}
               </Button>
             </div>
           </div>
         )}
 
-        <button type="button" className="welcome-skip-all" onClick={handleSkip}>
-          跳过引导
-        </button>
+      <button type="button" className="welcome-skip-all" onClick={handleSkip}>
+          {t('welcome.skipAll')}
+      </button>
       </div>
     </div>
   )

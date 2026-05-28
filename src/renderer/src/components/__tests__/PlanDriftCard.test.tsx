@@ -45,7 +45,7 @@ describe('PlanDriftCard', () => {
 
   it('displays drift direction and metrics', () => {
     render(<PlanDriftCard proposal={mockProposal} />)
-    expect(screen.getByText('计划偏移建议')).toBeInTheDocument()
+    expect(screen.getByText('Plan Drift Suggestion')).toBeInTheDocument()
     expect(screen.getByText('15.3%')).toBeInTheDocument()
     expect(screen.getByText('1800 kcal')).toBeInTheDocument()
   })
@@ -57,7 +57,7 @@ describe('PlanDriftCard', () => {
     )
 
     const user = userEvent.setup()
-    const acceptButton = screen.getByRole('button', { name: /采用新计划/ })
+    const acceptButton = screen.getByRole('button', { name: /Accept new plan/ })
     await user.click(acceptButton)
     // Should not throw
   })
@@ -68,6 +68,6 @@ describe('PlanDriftCard', () => {
       driftDirection: 'under',
     }
     render(<PlanDriftCard proposal={underProposal} />)
-    expect(screen.getByText('⬇️ 不足')).toBeInTheDocument()
+    expect(screen.getByText('Below target')).toBeInTheDocument()
   })
 })

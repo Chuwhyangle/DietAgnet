@@ -67,6 +67,28 @@ vi.mock('../../proactive/ProactiveReminder', () => ({
   default: () => <div data-testid="proactive-reminder-mock" />,
 }))
 
+// Mock i18n because this unit test renders Layout outside the app-level provider.
+vi.mock('../../i18n', () => ({
+  useI18n: () => {
+    const translations: Record<string, string> = {
+      'layout.brand': '猫猫虫',
+      'layout.subtitle': '饮食小助手',
+      'layout.home': '首页',
+      'layout.recipes': '菜谱',
+      'layout.dietLog': '饮食记录',
+      'layout.chat': 'AI 对话',
+      'layout.settings': '设置',
+      'layout.footer': '吃好喝好，健康长大喵~',
+    }
+
+    return {
+      language: 'zh',
+      setLanguage: () => undefined,
+      t: (key: string) => translations[key] ?? key,
+    }
+  },
+}))
+
 const { default: AppLayout } = await import('../Layout')
 
 describe('Layout (AppLayout)', () => {

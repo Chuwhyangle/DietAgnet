@@ -17,6 +17,7 @@ import {
 } from '@ant-design/icons'
 import { acceptProposal, dismissProposal } from '../coaching/planDriftMonitor'
 import type { PlanAdjustmentProposal } from '../coaching/types'
+import { useI18n } from '../i18n'
 import './PlanDriftCard.css'
 
 const { Text } = Typography
@@ -40,6 +41,8 @@ function PlanDriftCard({
   onAccepted,
   onDismissed,
 }: PlanDriftCardProps): JSX.Element {
+  const { language } = useI18n()
+  const l = (zh: string, en: string): string => (language === 'zh' ? zh : en)
   const [loading, setLoading] = useState<'accept' | 'dismiss' | null>(null)
 
   const isOver = proposal.driftDirection === 'over'
@@ -52,10 +55,10 @@ function PlanDriftCard({
     setLoading('accept')
     try {
       await acceptProposal(proposal.proposedPlan.id!)
-      message.success('已采用新计划！')
+      message.success(l('已采用新计划！', 'New plan accepted.'))
       onAccepted?.()
     } catch (err) {
-      message.error('操作失败，请重试')
+      message.error(l('操作失败，请重试', 'Operation failed. Please try again.'))
     } finally {
       setLoading(null)
     }
@@ -69,10 +72,10 @@ function PlanDriftCard({
     setLoading('dismiss')
     try {
       await dismissProposal(proposal.proposedPlan.id!)
-      message.info('已保持现有计划')
+      message.info(l('已保持现有计划', 'Current plan kept.'))
       onDismissed?.()
     } catch (err) {
-      message.error('操作失败，请重试')
+      message.error(l('操作失败，请重试', 'Operation failed. Please try again.'))
     } finally {
       setLoading(null)
     }
@@ -87,33 +90,33 @@ function PlanDriftCard({
       <div className="plan-drift-header">
         <div className="plan-drift-header-left">
           <ExperimentOutlined style={{ fontSize: 18, color: '#fa8c16' }} />
-          <Text strong>计划偏移建议</Text>
+          <Text strong>{l('计划偏移建议', 'Plan Drift Suggestion')}</Text>
         </div>
         <Tag
           color={isOver ? 'error' : 'success'}
           icon={isOver ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
           bordered={false}
         >
-          {isOver ? '偏高' : '偏低'}
+          {isOver ? l('偏高', 'High') : l('偏低', 'Low')}
         </Tag>
       </div>
 
       <div className="plan-drift-body">
         <div className="plan-drift-metrics">
           <div className="plan-drift-metric">
-            <Text type="secondary">偏移方向</Text>
+            <Text type="secondary">{l('偏移方向', 'Direction')}</Text>
             <span className="plan-drift-metric-value">
-              {isOver ? '⬆️ 超出' : '⬇️ 不足'}
+              {isOver ? l('⬆️ 超出', 'Above target') : l('⬇️ 不足', 'Below target')}
             </span>
           </div>
           <div className="plan-drift-metric">
-            <Text type="secondary">平均偏移</Text>
+            <Text type="secondary">{l('平均偏移', 'Average drift')}</Text>
             <span className="plan-drift-metric-value">
               {proposal.avgDriftPercent.toFixed(1)}%
             </span>
           </div>
           <div className="plan-drift-metric">
-            <Text type="secondary">建议目标</Text>
+            <Text type="secondary">{l('建议目标', 'Suggested target')}</Text>
             <span className="plan-drift-metric-value">
               {proposal.proposedPlan.dailyCalorieTarget} kcal
             </span>
@@ -132,7 +135,7 @@ function PlanDriftCard({
             disabled={loading !== null}
             icon={loading === 'dismiss' ? <LoadingOutlined /> : undefined}
           >
-            保持现状
+            {l('保持现状', 'Keep current')}
           </Button>
           <Button
             type="primary"
@@ -140,7 +143,7 @@ function PlanDriftCard({
             disabled={loading !== null}
             icon={loading === 'accept' ? <LoadingOutlined /> : undefined}
           >
-            采用新计划
+            {l('采用新计划', 'Accept new plan')}
           </Button>
         </div>
       </div>

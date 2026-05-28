@@ -18,6 +18,7 @@ import {
   type DailyPlanAdjustmentResponse,
   type ProactiveEvent,
 } from '../stores/planning'
+import { useI18n } from '../i18n'
 import './AgentActivity.css'
 
 const { Text, Title, Paragraph } = Typography
@@ -120,6 +121,8 @@ function eventTargetPath(event: ProactiveEvent): string {
 
 export default function AgentActivity(): JSX.Element {
   const navigate = useNavigate()
+  const { language } = useI18n()
+  const l = (zh: string, en: string): string => (language === 'zh' ? zh : en)
   const [events, setEvents] = useState<ProactiveEvent[]>([])
   const [latestAdjustment, setLatestAdjustment] = useState<DailyPlanAdjustment | null>(null)
   const [running, setRunning] = useState(false)
@@ -236,7 +239,10 @@ export default function AgentActivity(): JSX.Element {
           </Tag>
           <Title level={4} className="agent-activity-title">Agent Inbox</Title>
           <Text type="secondary">
-            最近的主动提醒、跳过原因和动态计划建议都会留在这里，方便演示闭环。
+            {l(
+              '最近的主动提醒、跳过原因和动态计划建议都会留在这里，方便演示闭环。',
+              'Recent proactive reminders, skipped reasons, and dynamic plan suggestions are collected here.',
+            )}
           </Text>
         </div>
         <Button
@@ -252,7 +258,7 @@ export default function AgentActivity(): JSX.Element {
       {activityItems.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="还没有 Agent 活动。可以手动运行一次检查。"
+          description={l('还没有 Agent 活动。可以手动运行一次检查。', 'No Agent activity yet. You can run a manual check.')}
         />
       ) : (
         <div className="agent-activity-list">
@@ -280,26 +286,26 @@ export default function AgentActivity(): JSX.Element {
 
               <div className="agent-activity-actions">
                 {item.userResponse && (
-                  <Tag bordered={false}>userResponse: {item.userResponse}</Tag>
+                  <Tag bordered={false}>{l('用户响应', 'userResponse')}: {item.userResponse}</Tag>
                 )}
 
                 {item.kind === 'adjustment' && !item.adjustment.userResponse && (
                   <Space size={8} wrap>
                     <Button size="small" type="primary" onClick={() => void handleAdjustmentResponse(item.adjustment, 'accepted')}>
-                      accept
+                      {l('采纳', 'accept')}
                     </Button>
                     <Button size="small" onClick={() => void handleAdjustmentResponse(item.adjustment, 'snoozed')}>
-                      snooze
+                      {l('稍后', 'snooze')}
                     </Button>
                     <Button size="small" onClick={() => void handleAdjustmentResponse(item.adjustment, 'dismissed')}>
-                      dismiss
+                      {l('忽略', 'dismiss')}
                     </Button>
                   </Space>
                 )}
 
                 {item.kind === 'event' && item.event.delivered && !item.event.userResponse && (
                   <Button size="small" onClick={() => void handleOpenEvent(item.event)}>
-                    open
+                    {l('打开', 'open')}
                   </Button>
                 )}
               </div>

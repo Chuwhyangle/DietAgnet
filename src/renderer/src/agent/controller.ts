@@ -7,7 +7,7 @@ import type {
 import { getSettings } from '../stores/settings'
 import { buildMemoryContextForPrompt } from '../memory/prompt'
 import { buildSystemPrompt } from './prompt'
-import { AGENT_TOOLS, executeToolCall, type LocalToolExecutionContext } from './tools'
+import { executeToolCall, getToolDefinitions, type LocalToolExecutionContext } from './tools'
 
 export interface ConversationTurn {
   role: 'user' | 'assistant'
@@ -173,7 +173,8 @@ function stringifyToolResult(result: unknown): string {
 
 export async function runAgentConversation(options: AgentRunOptions): Promise<AgentRunResult> {
   const settings = getSettings()
-  const memoryContext = await buildMemoryContextForPrompt()
+  const memoryContext = await buildMemoryContextForPrompt(12, settings.language)
+  const agentTools = getToolDefinitions(settings.language)
   const remoteMessages: RemoteChatMessage[] = [
     {
       role: 'system',
@@ -190,7 +191,7 @@ export async function runAgentConversation(options: AgentRunOptions): Promise<Ag
     settings: settings.agent,
     messages: remoteMessages,
     tools: selectAgentTools({
-      tools: AGENT_TOOLS,
+      tools: agentTools,
       userInput: options.userInput,
       history: options.history,
       provider: settings.agent.provider,
@@ -207,11 +208,13 @@ export async function runAgentConversation(options: AgentRunOptions): Promise<Ag
 
     if (response.toolCalls.length === 0) {
       const fallbackNote = response.toolFallback
-        ? `\n\n（当前自定义接口拒绝了工具调用参数，本轮已自动切换为纯聊天模式${response.toolRequestMode ? `：${response.toolRequestMode}` : ''}；记录饮食、读取本地数据、动态计划建议等本地 Agent 工具能力暂时不会执行。）`
+        ? settings.language === 'zh'
+          ? `\n\n（当前自定义接口拒绝了工具调用参数，本轮已自动切换为纯聊天模式${response.toolRequestMode ? `：${response.toolRequestMode}` : ''}；记录饮食、读取本地数据、动态计划建议等本地 Agent 工具能力暂时不会执行。）`
+          : `\n\n(The current custom endpoint rejected tool-call parameters, so this turn automatically fell back to plain chat${response.toolRequestMode ? `: ${response.toolRequestMode}` : ''}. Local agent tools such as meal logging, local data reads, and dynamic plan suggestions did not run.)`
         : ''
 
       return {
-        assistantMessage: `${response.content.trim() || '喵~ 我处理好了，不过这次没有拿到文字回复。'}${fallbackNote}`,
+        assistantMessage: `${response.content.trim() || (settings.language === 'zh' ? '喵~ 我处理好了，不过这次没有拿到文字回复。' : 'Done, but I did not receive a text reply this time.')}${fallbackNote}`,
         assistantRemoteTranscript: assistantTurnTranscript.length > 0 ? assistantTurnTranscript : undefined,
       }
     }
@@ -219,12 +222,14 @@ export async function runAgentConversation(options: AgentRunOptions): Promise<Ag
     usedToolCalls = true
     const currentSignature = buildToolCallSignature(response.toolCalls)
     if (previousToolCallSignature === currentSignature) {
-      throw new Error('模型重复发起了同一组工具调用，当前渠道大概率不兼容完整的 tool-call 循环。')
+      throw new Error(settings.language === 'zh'
+        ? '模型重复发起了同一组工具调用，当前渠道大概率不兼容完整的 tool-call 循环。'
+        : 'The model repeated the same tool calls. This provider is likely incompatible with the full tool-call loop.')
     }
     previousToolCallSignature = currentSignature
 
     for (const toolCall of response.toolCalls) {
-      const result = await executeToolCall(toolCall, options)
+      const result = await executeToolCall(toolCall, { ...options, language: settings.language })
       options.onToolFinished?.({ toolCall, result })
       const toolMessage: RemoteChatMessage = {
         role: 'tool',
@@ -236,5 +241,7 @@ export async function runAgentConversation(options: AgentRunOptions): Promise<Ag
     }
   }
 
-  throw new Error('工具调用轮数超出上限，请换一种说法再试一次。')
+  throw new Error(settings.language === 'zh'
+    ? '工具调用轮数超出上限，请换一种说法再试一次。'
+    : 'Tool-call rounds exceeded the limit. Please rephrase and try again.')
 }

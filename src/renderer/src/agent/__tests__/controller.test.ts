@@ -20,6 +20,7 @@ import type { AgentRunOptions } from '../controller'
 // Mock dependencies that the controller imports at module level
 vi.mock('../../stores/settings', () => ({
   getSettings: () => ({
+    language: 'zh',
     nickname: '测试用户',
     calorieGoal: 2000,
     onboarded: true,
@@ -50,6 +51,7 @@ vi.mock('../../memory/prompt', () => ({
 
 vi.mock('../tools', () => ({
   AGENT_TOOLS: [],
+  getToolDefinitions: vi.fn(() => []),
   executeToolCall: vi.fn(async (toolCall: { name: string }) => ({
     success: true,
     tool: toolCall.name,

@@ -4,6 +4,7 @@ import {
   type AgentToolInvocation,
 } from '../../../shared/agent'
 import { recipes, type Recipe } from '../data/recipes'
+import { localizeRecipe } from '../data/recipeTranslations.en'
 import { validateRecipes } from '../data/recipeValidation'
 import {
   addMealItemToDietLog,
@@ -34,7 +35,7 @@ import {
   type PlannedMealItem,
   type PlannedMealStatus,
 } from '../stores/planning'
-import { getSettings, saveSettings } from '../stores/settings'
+import { getSettings, saveSettings, type AppLanguage } from '../stores/settings'
 import { evaluateDailyPlanAdjustment, getDailyPlanGap } from '../planning/dynamicPlan'
 import {
   forget,
@@ -63,6 +64,7 @@ type AgentPage = 'home' | 'recipes' | 'diet-log' | 'chat' | 'settings'
 
 export interface LocalToolExecutionContext {
   navigate?: (path: string) => void
+  language?: AppLanguage
 }
 
 const PAGE_PATHS: Record<AgentPage, string> = {
@@ -1019,10 +1021,22 @@ function isMealType(value: unknown): value is MealType {
   return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack'
 }
 
-function toFiniteNumber(value: unknown, fieldName: string): number {
+function languageMessage(
+  language: AppLanguage,
+  zh: string,
+  en: string,
+): string {
+  return language === 'zh' ? zh : en
+}
+
+function toFiniteNumber(value: unknown, fieldName: string, language: AppLanguage = getSettings().language): number {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) {
-    throw new Error(`${fieldName} 必须是有效数字。`)
+    throw new Error(languageMessage(
+      language,
+      `${fieldName} 必须是有效数字。`,
+      `${fieldName} must be a valid number.`,
+    ))
   }
   return numeric
 }
@@ -1077,10 +1091,10 @@ function toOptionalBoundedInteger(value: unknown, min: number, max: number): num
   return Math.min(Math.max(Math.round(numeric), min), max)
 }
 
-function toDateStringArg(value: unknown, fallback = dayjs().format('YYYY-MM-DD')): string {
+function toDateStringArg(value: unknown, fallback = dayjs().format('YYYY-MM-DD'), language: AppLanguage = getSettings().language): string {
   const date = String(value ?? fallback).trim() || fallback
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || dayjs(date).format('YYYY-MM-DD') !== date) {
-    throw new Error('date 参数必须是 YYYY-MM-DD 格式。')
+    throw new Error(language === 'zh' ? 'date 参数必须是 YYYY-MM-DD 格式。' : 'The date parameter must use YYYY-MM-DD format.')
   }
   return date
 }
@@ -1089,7 +1103,7 @@ function getRecipeCollection(): Recipe[] {
   return getAllRecipesWithCustomFoods(recipes)
 }
 
-function searchRecipes(keyword: string): Recipe[] {
+function searchRecipes(keyword: string, language: AppLanguage): Recipe[] {
   const recipeCollection = getRecipeCollection()
   const normalizedKeyword = toKeyword(keyword)
   if (!normalizedKeyword) {
@@ -1102,6 +1116,9 @@ function searchRecipes(keyword: string): Recipe[] {
         recipe.name,
         recipe.category,
         ...recipe.ingredients.map((ingredient) => ingredient.name),
+        localizeRecipe(recipe, language).name,
+        localizeRecipe(recipe, language).category,
+        ...localizeRecipe(recipe, language).ingredients.map((ingredient) => ingredient.name),
       ]
 
       return searchPool.some((value) => value.toLowerCase().includes(normalizedKeyword))
@@ -1112,7 +1129,7 @@ function searchRecipes(keyword: string): Recipe[] {
 function pickRecipeById(recipeId: unknown): Recipe {
   const recipe = findRecipeByIdWithCustomFoods(recipes, String(recipeId))
   if (!recipe) {
-    throw new Error('没有找到对应的菜谱或自定义食物。')
+    throw new Error(getSettings().language === 'zh' ? '没有找到对应的菜谱或自定义食物。' : 'No matching recipe or custom food was found.')
   }
   return recipe
 }
@@ -1147,6 +1164,7 @@ function buildNutritionSuggestions(
   calorieGoal: number,
   period: 'today' | 'week',
   trackedDays: number,
+  language: AppLanguage,
 ): string[] {
   const suggestions: string[] = []
   const baselineCalories = period === 'week' && trackedDays > 0
@@ -1154,14 +1172,20 @@ function buildNutritionSuggestions(
     : summary.calories
 
   if (summary.mealCount === 0) {
-    suggestions.push('先记录一餐吧，猫猫虫才能继续帮你分析喵。')
+    suggestions.push(language === 'zh'
+      ? '先记录一餐吧，猫猫虫才能继续帮你分析喵。'
+      : 'Log one meal first so Diet Agent can analyze your intake.')
     return suggestions
   }
 
   if (baselineCalories < calorieGoal * 0.7) {
-    suggestions.push('整体热量偏低，可以适当补一点优质主食或蛋白质。')
+    suggestions.push(language === 'zh'
+      ? '整体热量偏低，可以适当补一点优质主食或蛋白质。'
+      : 'Overall calories look low. Consider adding a quality staple or protein source.')
   } else if (baselineCalories > calorieGoal * 1.1) {
-    suggestions.push('整体热量略高，下一餐可以清淡一点。')
+    suggestions.push(language === 'zh'
+      ? '整体热量略高，下一餐可以清淡一点。'
+      : 'Overall calories are a bit high. Keep the next meal lighter.')
   }
 
   const { proteinRatio, carbsRatio, fatRatio } = getMacroRatios(
@@ -1172,22 +1196,34 @@ function buildNutritionSuggestions(
   )
 
   if (proteinRatio < 0.16) {
-    suggestions.push('蛋白质占比偏低，可以多选鸡蛋、豆腐、鱼虾或鸡胸肉。')
+    suggestions.push(language === 'zh'
+      ? '蛋白质占比偏低，可以多选鸡蛋、豆腐、鱼虾或鸡胸肉。'
+      : 'Protein share is low. Eggs, tofu, fish, shrimp, or chicken breast would help.')
   }
 
   if (fatRatio > 0.35) {
-    suggestions.push('脂肪占比偏高，少一点油炸或重油菜会更稳妥。')
+    suggestions.push(language === 'zh'
+      ? '脂肪占比偏高，少一点油炸或重油菜会更稳妥。'
+      : 'Fat share is high. Go easier on fried or oil-heavy dishes.')
   }
 
   if (carbsRatio > 0.6) {
-    suggestions.push('碳水占比偏高，搭配更多蔬菜和蛋白质会更均衡。')
+    suggestions.push(language === 'zh'
+      ? '碳水占比偏高，搭配更多蔬菜和蛋白质会更均衡。'
+      : 'Carbohydrate share is high. Pairing with more vegetables and protein will balance it.')
   }
 
   if (summary.mealCount < Math.max(3, trackedDays)) {
-    suggestions.push('记录餐次偏少，尽量把三餐都记上，统计会更准确。')
+    suggestions.push(language === 'zh'
+      ? '记录餐次偏少，尽量把三餐都记上，统计会更准确。'
+      : 'A few meals are missing. Logging all main meals will make the analysis more accurate.')
   }
 
-  return suggestions.length > 0 ? suggestions : ['整体搭配比较稳，可以继续保持这个节奏。']
+  return suggestions.length > 0
+    ? suggestions
+    : [language === 'zh'
+      ? '整体搭配比较稳，可以继续保持这个节奏。'
+      : 'The overall mix looks steady. Keep this rhythm going.']
 }
 
 function buildRecommendationReason(
@@ -1197,27 +1233,223 @@ function buildRecommendationReason(
     maxCalories?: number
     category?: string
   },
+  language: AppLanguage,
 ): string {
   const reasons: string[] = []
+  const localizedRecipe = localizeRecipe(recipe, language)
 
   if (params.preference) {
-    reasons.push(`和「${params.preference}」偏好匹配`)
+    reasons.push(language === 'zh'
+      ? `和「${params.preference}」偏好匹配`
+      : `matches "${params.preference}"`)
   }
 
   if (params.category) {
-    reasons.push(`属于 ${recipe.category}`)
+    reasons.push(language === 'zh'
+      ? `属于 ${localizedRecipe.category}`
+      : `in ${localizedRecipe.category}`)
   }
 
   if (params.maxCalories) {
-    reasons.push(`约 ${recipe.calories} kcal`)
+    reasons.push(language === 'zh'
+      ? `约 ${recipe.calories} kcal`
+      : `about ${recipe.calories} kcal`)
   } else {
-    reasons.push(`热量约 ${recipe.calories} kcal`)
+    reasons.push(language === 'zh'
+      ? `热量约 ${recipe.calories} kcal`
+      : `calories about ${recipe.calories} kcal`)
   }
 
-  return reasons.join('，')
+  return reasons.join(language === 'zh' ? '，' : ', ')
 }
 
-function formatToolStatusContent(toolName: string, args: Record<string, unknown>, result: unknown): string {
+const toolDescriptionEn: Record<string, string> = {
+  get_today_nutrition: 'Get today’s nutrition intake summary.',
+  get_current_plan: 'Read the latest active diet plan and calorie/macro targets.',
+  check_today_plan_gap: 'Compare planned targets with actual intake for a date and return remaining calories and meal gaps.',
+  suggest_plan_adjustment: 'Create a supplement or reduction suggestion from today’s plan gap and save an audit record.',
+  record_adjustment_response: 'Record the user response to a dynamic plan suggestion.',
+  get_proactive_event_history: 'Read recent proactive reminder history, including rules, messages, times, and responses.',
+  update_reminder_preferences: 'Update proactive reminder preferences, quiet hours, cooldown, and summary notification settings.',
+  validate_recipe_library: 'Validate recipe library data quality.',
+  estimate_recipe_nutrition: 'Create a pending recipe nutrition calibration record from model estimates.',
+  list_recipe_calibrations: 'List recipe calibration audit records.',
+  review_recipe_calibration: 'Update the review status of a recipe calibration record.',
+  remember: 'Save an explicit long-term user fact such as preference, allergy, avoidance, habit, schedule, health note, or goal.',
+  recall: 'Recall long-term memories by text, type, or tags.',
+  forget: 'Archive a long-term memory when the user corrects or removes it.',
+  list_user_facts: 'List currently saved long-term memory facts.',
+  get_user_rhythm_summary: 'Read a local summary of recent diet logging rhythm.',
+  update_memory_confidence: 'Update confidence for a long-term memory.',
+  search_knowledgebase: 'Search the local lightweight diet knowledge base.',
+  lookup_food_nutrition: 'Look up estimated calories and macros for common foods.',
+  find_foods_by_criteria: 'Find foods by nutrition criteria such as low calorie, high protein, or low fat.',
+  get_guideline_advice: 'Get local diet guidance for plan gaps, meal balance, and safety boundaries.',
+  get_diet_log: 'Get diet log entries for a date.',
+  get_week_summary: 'Get nutrition summary for this week or a specified week.',
+  search_recipe: 'Search recipes by keyword, category, or ingredient.',
+  get_recipe_detail: 'Get details for one recipe.',
+  get_recipes_by_category: 'List recipes in a category.',
+  get_settings: 'Get current user settings.',
+  add_meal: 'Add a meal entry from the recipe library.',
+  add_custom_food_meal: 'Log a food that is not in the recipe library using estimated nutrition.',
+  remove_meal_item: 'Remove one item from a meal entry.',
+  update_settings: 'Update user nickname or calorie goal.',
+  recommend_recipe: 'Recommend recipes based on preferences and constraints.',
+  analyze_nutrition_balance: 'Analyze nutrition balance for today or this week.',
+  navigate_to: 'Open a page in the app.',
+  suggest_meal_plan: 'Create a pending AI meal plan suggestion for a specific date and meal.',
+  confirm_meal_plan: 'Confirm, skip, or delete a planned meal suggestion.',
+  get_meal_plans: 'Get planned meals for a date.',
+}
+
+function translateToolDescription(text: string, language: AppLanguage, toolName?: string): string {
+  if (language === 'zh') {
+    return text
+  }
+
+  if (toolName && toolDescriptionEn[toolName]) {
+    return toolDescriptionEn[toolName]
+  }
+
+  if (/日期.*YYYY-MM-DD/.test(text)) return 'Optional date in YYYY-MM-DD format. Defaults to today when omitted.'
+  if (/餐次/.test(text)) return 'Meal type.'
+  if (/菜谱 ID/.test(text)) return 'Recipe ID.'
+  if (/返回数量/.test(text)) return 'Optional result limit.'
+  if (/置信度/.test(text)) return 'Confidence from 0 to 1.'
+  if (/用户响应/.test(text)) return 'User response.'
+  if (/新的/.test(text)) return 'New value.'
+  if (/可选/.test(text)) return 'Optional parameter.'
+  return /[\u3400-\u9fff]/.test(text) ? 'Parameter description.' : text
+}
+
+function localizeToolSchema(value: unknown, language: AppLanguage, toolName?: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => localizeToolSchema(item, language))
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  const result: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    result[key] = key === 'description' && typeof entry === 'string'
+      ? translateToolDescription(entry, language, toolName)
+      : localizeToolSchema(entry, language)
+  }
+  return result
+}
+
+export function getToolDefinitions(language: AppLanguage = 'en'): AgentToolDefinition[] {
+  if (language === 'zh') {
+    return toolDefinitions
+  }
+
+  return toolDefinitions.map((tool) => ({
+    ...tool,
+    function: {
+      ...tool.function,
+      description: translateToolDescription(tool.function.description ?? '', language, tool.function.name),
+      parameters: localizeToolSchema(tool.function.parameters, language) as AgentToolDefinition['function']['parameters'],
+    },
+  }))
+}
+
+function formatToolStatusContent(
+  toolName: string,
+  args: Record<string, unknown>,
+  result: unknown,
+  language: AppLanguage,
+): string {
+  if (language === 'en') {
+    const mealLabel = {
+      breakfast: 'breakfast',
+      lunch: 'lunch',
+      dinner: 'dinner',
+      snack: 'snack',
+    }[args.mealType as MealType] ?? 'meal'
+
+    switch (toolName) {
+      case 'add_meal':
+        return `🔧 Logged ${mealLabel}`
+      case 'add_custom_food_meal':
+        return `🥣 Logged estimated custom food for ${mealLabel}`
+      case 'remove_meal_item':
+        return `🧹 Removed one ${mealLabel} item`
+      case 'update_settings':
+        return '⚙️ Updated settings'
+      case 'navigate_to':
+        return '🧭 Opened the requested page'
+      case 'get_today_nutrition':
+        return '📊 Summarized today’s nutrition'
+      case 'get_diet_log':
+        return `📝 Read diet log for ${String(args.date ?? '')}`
+      case 'get_week_summary':
+        return '📅 Summarized this week’s diet'
+      case 'search_recipe':
+        return `🔎 Searched recipes for “${String(args.keyword ?? '')}”`
+      case 'get_recipe_detail':
+        return '🍳 Loaded recipe details'
+      case 'get_recipes_by_category':
+        return `📚 Loaded ${String(args.category ?? '')} recipes`
+      case 'get_settings':
+        return '👤 Read current settings'
+      case 'recommend_recipe':
+        return '🍽️ Picked suitable recipes'
+      case 'analyze_nutrition_balance':
+        return `📈 Analyzed ${args.period === 'week' ? 'this week' : 'today'}`
+      case 'get_current_plan':
+        return '📋 Read current personal plan'
+      case 'check_today_plan_gap':
+        return '🧮 Checked today’s plan gap'
+      case 'suggest_plan_adjustment':
+        return '🐛 Created a dynamic plan suggestion'
+      case 'record_adjustment_response':
+        return '📝 Recorded your response'
+      case 'get_proactive_event_history':
+        return '🔔 Read reminder history'
+      case 'update_reminder_preferences':
+        return '🔕 Updated reminder preferences'
+      case 'validate_recipe_library':
+        return '🧪 Validated recipe data'
+      case 'estimate_recipe_nutrition':
+        return '🧾 Created a pending recipe calibration'
+      case 'list_recipe_calibrations':
+        return '📚 Read recipe calibration records'
+      case 'review_recipe_calibration':
+        return '✅ Updated calibration review status'
+      case 'remember':
+        return '🧠 Saved long-term memory'
+      case 'recall':
+        return '🧠 Recalled relevant memories'
+      case 'forget':
+        return '🗑️ Archived memory'
+      case 'list_user_facts':
+        return '📒 Read long-term memories'
+      case 'get_user_rhythm_summary':
+        return '📈 Summarized recent logging rhythm'
+      case 'update_memory_confidence':
+        return '🧠 Updated memory confidence'
+      case 'search_knowledgebase':
+        return 'Searched local knowledge base'
+      case 'lookup_food_nutrition':
+        return 'Looked up food nutrition'
+      case 'find_foods_by_criteria':
+        return 'Filtered foods by nutrition criteria'
+      case 'get_guideline_advice':
+        return 'Read diet guidance'
+      case 'suggest_meal_plan':
+        return '🍽️ Created a meal plan suggestion'
+      case 'confirm_meal_plan':
+        return '✅ Updated planned meal status'
+      case 'get_meal_plans':
+        return `📋 Read planned meals for ${String(args.date ?? '')}`
+      default:
+        return `🔧 Ran tool ${toolName}`
+    }
+  }
+
   switch (toolName) {
     case 'add_meal':
       return `🔧 已帮你记录${mealTypeLabels[args.mealType as MealType] ?? '餐次'}`
@@ -1300,8 +1532,12 @@ function formatToolStatusContent(toolName: string, args: Record<string, unknown>
 
 export const AGENT_TOOLS = toolDefinitions
 
-export function describeToolExecution(toolCall: AgentToolInvocation, result: unknown): string {
-  return formatToolStatusContent(toolCall.name, toolCall.arguments, result)
+export function describeToolExecution(
+  toolCall: AgentToolInvocation,
+  result: unknown,
+  language: AppLanguage = getSettings().language,
+): string {
+  return formatToolStatusContent(toolCall.name, toolCall.arguments, result, language)
 }
 
 export async function executeToolCall(
@@ -1310,6 +1546,7 @@ export async function executeToolCall(
 ): Promise<unknown> {
   const args = toolCall.arguments ?? {}
   const settings = getSettings()
+  const language = context.language ?? settings.language
 
   switch (toolCall.name) {
     case 'get_today_nutrition': {
@@ -1323,7 +1560,7 @@ export async function executeToolCall(
     case 'get_diet_log': {
       const date = String(args.date ?? '').trim()
       if (!date) {
-        throw new Error('缺少 date 参数。')
+        throw new Error(language === 'zh' ? '缺少 date 参数。' : 'Missing date parameter.')
       }
 
       return {
@@ -1339,11 +1576,11 @@ export async function executeToolCall(
 
     case 'search_recipe': {
       const keyword = String(args.keyword ?? '').trim()
-      return searchRecipes(keyword).map((recipe) => ({
+      return searchRecipes(keyword, language).map((recipe) => ({
         id: recipe.id,
-        name: recipe.name,
+        name: localizeRecipe(recipe, language).name,
         emoji: recipe.emoji,
-        category: recipe.category,
+        category: localizeRecipe(recipe, language).category,
         calories: recipe.calories,
         nutrition: recipe.nutrition,
       }))
@@ -1352,21 +1589,21 @@ export async function executeToolCall(
     case 'get_recipe_detail': {
       const recipe = pickRecipeById(args.recipeId)
       return {
-        ...recipe,
+        ...localizeRecipe(recipe, language),
       }
     }
 
     case 'get_recipes_by_category': {
       const category = String(args.category ?? '').trim()
       if (!category) {
-        throw new Error('缺少 category 参数。')
+        throw new Error(language === 'zh' ? '缺少 category 参数。' : 'Missing category parameter.')
       }
 
       return getRecipeCollection()
-        .filter((recipe) => recipe.category === category)
+        .filter((recipe) => recipe.category === category || localizeRecipe(recipe, language).category.toLowerCase() === category.toLowerCase())
         .map((recipe) => ({
           id: recipe.id,
-          name: recipe.name,
+          name: localizeRecipe(recipe, language).name,
           emoji: recipe.emoji,
           calories: recipe.calories,
           nutrition: recipe.nutrition,
@@ -1385,7 +1622,7 @@ export async function executeToolCall(
       const date = String(args.date ?? '').trim()
       const mealType = args.mealType
       if (!date || !isMealType(mealType)) {
-        throw new Error('date 或 mealType 参数无效。')
+        throw new Error(language === 'zh' ? 'date 或 mealType 参数无效。' : 'Invalid date or mealType parameter.')
       }
 
       const recipe = pickRecipeById(args.recipeId)
@@ -1401,7 +1638,7 @@ export async function executeToolCall(
         success: true,
         totalCalories: summary.calories,
         mealType,
-        recipeName: recipe.name,
+        recipeName: localizeRecipe(recipe, language).name,
         servings: toPositiveNumber(args.servings, 1),
       }
     }
@@ -1411,15 +1648,21 @@ export async function executeToolCall(
       const mealType = args.mealType
       const name = String(args.name ?? '').trim()
       if (!date || !isMealType(mealType) || !name) {
-        throw new Error('date、mealType 或 name 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'date、mealType 或 name 参数无效。',
+          'Invalid date, mealType, or name parameter.',
+        ))
       }
 
       const servings = toPositiveNumber(args.servings, 1)
-      const calories = toFiniteNumber(args.calories, 'calories')
-      const protein = toFiniteNumber(args.protein, 'protein')
-      const carbs = toFiniteNumber(args.carbs, 'carbs')
-      const fat = toFiniteNumber(args.fat, 'fat')
-      const category = typeof args.category === 'string' && args.category.trim() ? args.category.trim() : '自定义'
+      const calories = toFiniteNumber(args.calories, 'calories', language)
+      const protein = toFiniteNumber(args.protein, 'protein', language)
+      const carbs = toFiniteNumber(args.carbs, 'carbs', language)
+      const fat = toFiniteNumber(args.fat, 'fat', language)
+      const category = typeof args.category === 'string' && args.category.trim()
+        ? args.category.trim()
+        : language === 'zh' ? '自定义' : 'Custom'
       const emoji = typeof args.emoji === 'string' && args.emoji.trim() ? args.emoji.trim() : '🍽️'
       const notes = typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim() : undefined
 
@@ -1432,8 +1675,12 @@ export async function executeToolCall(
         carbs,
         fat,
         source: 'ai_estimated',
-        ingredients: [{ name, amount: '1份' }],
-        steps: [notes ?? '由 AI 根据用户描述做了保守估算，供后续继续记录参考。'],
+        ingredients: [{ name, amount: language === 'zh' ? '1份' : '1 serving' }],
+        steps: [notes ?? (
+          language === 'zh'
+            ? '由 AI 根据用户描述做了保守估算，供后续继续记录参考。'
+            : 'AI made a conservative estimate from the user description for future logging reference.'
+        )],
       })
 
       const mealItem = createMealItemFromNutrition({
@@ -1472,13 +1719,21 @@ export async function executeToolCall(
       const itemIndex = Number(args.itemIndex)
 
       if (!date || !isMealType(mealType) || !Number.isInteger(itemIndex)) {
-        throw new Error('remove_meal_item \u53c2\u6570\u65e0\u6548\u3002')
+        throw new Error(languageMessage(
+          language,
+          'remove_meal_item 参数无效。',
+          'Invalid remove_meal_item parameters.',
+        ))
       }
 
       const previousLog = getDietLog(date)
       const previousMeal = previousLog?.meals.find((entry) => entry.type === mealType)
       if (!previousMeal || itemIndex < 0 || itemIndex >= previousMeal.items.length) {
-        throw new Error('没有找到要删除的记录。')
+        throw new Error(languageMessage(
+          language,
+          '没有找到要删除的记录。',
+          'No matching meal item was found to remove.',
+        ))
       }
 
       const nextLog = removeMealItemFromDietLog({
@@ -1523,11 +1778,14 @@ export async function executeToolCall(
 
       const candidates = getRecipeCollection()
         .filter((recipe) => {
+          const localizedRecipe = localizeRecipe(recipe, language)
           if (maxCalories && recipe.calories > maxCalories) {
             return false
           }
 
-          if (category && recipe.category !== category) {
+          if (category &&
+            recipe.category !== category &&
+            localizedRecipe.category.toLowerCase() !== category.toLowerCase()) {
             return false
           }
 
@@ -1538,19 +1796,24 @@ export async function executeToolCall(
           return true
         })
         .map((recipe) => {
+          const localizedRecipe = localizeRecipe(recipe, language)
           let score = 0
           if (!preferenceKeyword) {
             score += 1
           } else {
-            if (recipe.name.toLowerCase().includes(preferenceKeyword)) {
+            if ([
+              recipe.name,
+              recipe.category,
+              localizedRecipe.name,
+              localizedRecipe.category,
+            ].some((value) => value.toLowerCase().includes(preferenceKeyword))) {
               score += 4
             }
 
-            if (recipe.category.toLowerCase().includes(preferenceKeyword)) {
-              score += 3
-            }
-
-            if (recipe.ingredients.some((ingredient) => ingredient.name.toLowerCase().includes(preferenceKeyword))) {
+            if ([
+              ...recipe.ingredients.map((ingredient) => ingredient.name),
+              ...localizedRecipe.ingredients.map((ingredient) => ingredient.name),
+            ].some((value) => value.toLowerCase().includes(preferenceKeyword))) {
               score += 2
             }
           }
@@ -1571,15 +1834,15 @@ export async function executeToolCall(
 
       return candidates.map(({ recipe }) => ({
         id: recipe.id,
-        name: recipe.name,
+        name: localizeRecipe(recipe, language).name,
         emoji: recipe.emoji,
         calories: recipe.calories,
-        category: recipe.category,
+        category: localizeRecipe(recipe, language).category,
         reason: buildRecommendationReason(recipe, {
           preference: preference || undefined,
           maxCalories,
           category: category || undefined,
-        }),
+        }, language),
       }))
     }
 
@@ -1591,8 +1854,10 @@ export async function executeToolCall(
         const summary = summarizeDietLog(getTodayLog())
         return {
           period,
-          summary: `今天一共摄入 ${summary.calories} kcal，蛋白质 ${summary.protein}g，碳水 ${summary.carbs}g，脂肪 ${summary.fat}g。`,
-          suggestions: buildNutritionSuggestions(summary, calorieGoal, 'today', 1),
+          summary: language === 'zh'
+            ? `今天一共摄入 ${summary.calories} kcal，蛋白质 ${summary.protein}g，碳水 ${summary.carbs}g，脂肪 ${summary.fat}g。`
+            : `Today’s intake is ${summary.calories} kcal, with ${summary.protein}g protein, ${summary.carbs}g carbs, and ${summary.fat}g fat.`,
+          suggestions: buildNutritionSuggestions(summary, calorieGoal, 'today', 1, language),
         }
       }
 
@@ -1602,8 +1867,10 @@ export async function executeToolCall(
 
       return {
         period,
-        summary: `本周累计 ${summary.calories} kcal，日均约 ${averageCalories} kcal，蛋白质累计 ${summary.protein}g。`,
-        suggestions: buildNutritionSuggestions(summary, calorieGoal, 'week', weeklyReport.loggedDays),
+        summary: language === 'zh'
+          ? `本周累计 ${summary.calories} kcal，日均约 ${averageCalories} kcal，蛋白质累计 ${summary.protein}g。`
+          : `This week totals ${summary.calories} kcal, about ${averageCalories} kcal per day, with ${summary.protein}g protein in total.`,
+        suggestions: buildNutritionSuggestions(summary, calorieGoal, 'week', weeklyReport.loggedDays, language),
         report: {
           startDate: weeklyReport.startDate,
           endDate: weeklyReport.endDate,
@@ -1640,6 +1907,7 @@ export async function executeToolCall(
         mealType,
         persist: true,
         generatedBy: 'agent',
+        language,
       })
 
       return {
@@ -1657,7 +1925,11 @@ export async function executeToolCall(
       const response = String(args.response ?? '')
 
       if (!Number.isInteger(adjustmentId) || !['accepted', 'dismissed', 'snoozed'].includes(response)) {
-        throw new Error('record_adjustment_response 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'record_adjustment_response 参数无效。',
+          'Invalid record_adjustment_response parameters.',
+        ))
       }
 
       const updatedAdjustment = await updateDailyPlanAdjustmentResponse(
@@ -1666,7 +1938,11 @@ export async function executeToolCall(
       )
 
       if (!updatedAdjustment) {
-        throw new Error('没有找到对应的动态计划建议。')
+        throw new Error(languageMessage(
+          language,
+          '没有找到对应的动态计划建议。',
+          'No matching dynamic plan suggestion was found.',
+        ))
       }
 
       return {
@@ -1715,7 +1991,9 @@ export async function executeToolCall(
           trigger: 'context',
           priority: 'low',
           delivered: false,
-          message: '用户要求今天剩余时间不再提醒记录三餐。',
+          message: language === 'zh'
+            ? '用户要求今天剩余时间不再提醒记录三餐。'
+            : 'The user asked to stop meal logging reminders for the rest of today.',
           userResponse: 'snoozed',
           cooldownUntil: dayjs().endOf('day').toISOString(),
           payload: {
@@ -1739,15 +2017,19 @@ export async function executeToolCall(
 
     case 'estimate_recipe_nutrition': {
       const recipe = pickRecipeById(args.recipeId)
-      const estimatedCalories = toFiniteNumber(args.estimatedCalories, 'estimatedCalories')
-      const estimatedProtein = toFiniteNumber(args.estimatedProtein, 'estimatedProtein')
-      const estimatedCarbs = toFiniteNumber(args.estimatedCarbs, 'estimatedCarbs')
-      const estimatedFat = toFiniteNumber(args.estimatedFat, 'estimatedFat')
-      const confidence = toFiniteNumber(args.confidence, 'confidence')
+      const estimatedCalories = toFiniteNumber(args.estimatedCalories, 'estimatedCalories', language)
+      const estimatedProtein = toFiniteNumber(args.estimatedProtein, 'estimatedProtein', language)
+      const estimatedCarbs = toFiniteNumber(args.estimatedCarbs, 'estimatedCarbs', language)
+      const estimatedFat = toFiniteNumber(args.estimatedFat, 'estimatedFat', language)
+      const confidence = toFiniteNumber(args.confidence, 'confidence', language)
       const reasoning = String(args.reasoning ?? '').trim()
 
       if (!reasoning) {
-        throw new Error('估算依据不能为空。')
+        throw new Error(languageMessage(
+          language,
+          '估算依据不能为空。',
+          'Reasoning cannot be empty.',
+        ))
       }
 
       const record = createRecipeCalibrationRecord(recipe, {
@@ -1794,7 +2076,11 @@ export async function executeToolCall(
       const status = args.status
 
       if (!Number.isInteger(calibrationId) || !isRecipeCalibrationStatus(status)) {
-        throw new Error('review_recipe_calibration 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'review_recipe_calibration 参数无效。',
+          'Invalid review_recipe_calibration parameters.',
+        ))
       }
 
       const record = updateRecipeCalibrationStatus({
@@ -1804,7 +2090,11 @@ export async function executeToolCall(
       })
 
       if (!record) {
-        throw new Error('没有找到对应的菜谱校准记录。')
+        throw new Error(languageMessage(
+          language,
+          '没有找到对应的菜谱校准记录。',
+          'No matching recipe calibration record was found.',
+        ))
       }
 
       return {
@@ -1813,14 +2103,22 @@ export async function executeToolCall(
         sourceRecipeFileUnchanged: true,
         runtimeNutritionOverlay:
           status === 'approved'
-            ? '已通过：应用内读取菜谱时会使用本条 estimated 热量与宏量；将状态改为拒绝或需复核可收回。'
-            : '未生效：仅「已通过」状态会参与应用内营养覆盖。',
+            ? language === 'zh'
+              ? '已通过：应用内读取菜谱时会使用本条 estimated 热量与宏量；将状态改为拒绝或需复核可收回。'
+              : 'Approved: the app will use this estimated calorie and macro overlay when reading the recipe. Change the status to rejected or needs review to roll it back.'
+            : language === 'zh'
+              ? '未生效：仅「已通过」状态会参与应用内营养覆盖。'
+              : 'Not active: only approved records participate in the in-app nutrition overlay.',
       }
     }
 
     case 'remember': {
       if (!isUserMemoryType(args.type)) {
-        throw new Error('remember 的 type 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'remember 的 type 参数无效。',
+          'Invalid remember type parameter.',
+        ))
       }
 
       const result = await remember({
@@ -1851,7 +2149,11 @@ export async function executeToolCall(
     case 'forget': {
       const memoryId = Number(args.memoryId)
       if (!Number.isInteger(memoryId)) {
-        throw new Error('forget 的 memoryId 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'forget 的 memoryId 参数无效。',
+          'Invalid forget memoryId parameter.',
+        ))
       }
 
       const memory = await forget(memoryId, typeof args.reason === 'string' ? args.reason : undefined)
@@ -1889,7 +2191,11 @@ export async function executeToolCall(
       const memoryId = Number(args.memoryId)
       const confidence = Number(args.confidence)
       if (!Number.isInteger(memoryId) || !Number.isFinite(confidence)) {
-        throw new Error('update_memory_confidence 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'update_memory_confidence 参数无效。',
+          'Invalid update_memory_confidence parameters.',
+        ))
       }
 
       const memory = await updateMemoryConfidence(memoryId, confidence)
@@ -1902,7 +2208,11 @@ export async function executeToolCall(
     case 'search_knowledgebase': {
       const query = String(args.query ?? '').trim()
       if (!query) {
-        throw new Error('search_knowledgebase 缺少 query 参数。')
+        throw new Error(languageMessage(
+          language,
+          'search_knowledgebase 缺少 query 参数。',
+          'search_knowledgebase is missing the query parameter.',
+        ))
       }
 
       return {
@@ -1929,7 +2239,11 @@ export async function executeToolCall(
     case 'lookup_food_nutrition': {
       const name = String(args.name ?? '').trim()
       if (!name) {
-        throw new Error('lookup_food_nutrition 缺少 name 参数。')
+        throw new Error(languageMessage(
+          language,
+          'lookup_food_nutrition 缺少 name 参数。',
+          'lookup_food_nutrition is missing the name parameter.',
+        ))
       }
 
       const record = lookupFoodNutrition(name)
@@ -1955,7 +2269,11 @@ export async function executeToolCall(
     case 'get_guideline_advice': {
       const topic = String(args.topic ?? '').trim()
       if (!topic) {
-        throw new Error('get_guideline_advice 缺少 topic 参数。')
+        throw new Error(languageMessage(
+          language,
+          'get_guideline_advice 缺少 topic 参数。',
+          'get_guideline_advice is missing the topic parameter.',
+        ))
       }
 
       return {
@@ -1968,7 +2286,11 @@ export async function executeToolCall(
       const page = args.page as AgentPage
       const path = PAGE_PATHS[page]
       if (!path) {
-        throw new Error('无效的页面标识。')
+        throw new Error(languageMessage(
+          language,
+          '无效的页面标识。',
+          'Invalid page identifier.',
+        ))
       }
 
       if (context.navigate) {
@@ -1988,12 +2310,20 @@ export async function executeToolCall(
       const date = String(args.date ?? '').trim()
       const mealType = args.mealType
       if (!date || !isMealType(mealType)) {
-        throw new Error('date 或 mealType 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'date 或 mealType 参数无效。',
+          'Invalid date or mealType parameter.',
+        ))
       }
 
       const rawItems = Array.isArray(args.items) ? args.items : []
       if (rawItems.length === 0) {
-        throw new Error('items 不能为空。')
+        throw new Error(languageMessage(
+          language,
+          'items 不能为空。',
+          'items cannot be empty.',
+        ))
       }
 
       const items: PlannedMealItem[] = rawItems.map((item: Record<string, unknown>) => ({
@@ -2001,10 +2331,10 @@ export async function executeToolCall(
         name: String(item.name ?? ''),
         emoji: typeof item.emoji === 'string' ? item.emoji : undefined,
         servings: toPositiveNumber(item.servings, 1),
-        estimatedCalories: toFiniteNumber(item.estimatedCalories, 'estimatedCalories'),
-        estimatedProtein: toFiniteNumber(item.estimatedProtein, 'estimatedProtein'),
-        estimatedCarbs: toFiniteNumber(item.estimatedCarbs, 'estimatedCarbs'),
-        estimatedFat: toFiniteNumber(item.estimatedFat, 'estimatedFat'),
+        estimatedCalories: toFiniteNumber(item.estimatedCalories, 'estimatedCalories', language),
+        estimatedProtein: toFiniteNumber(item.estimatedProtein, 'estimatedProtein', language),
+        estimatedCarbs: toFiniteNumber(item.estimatedCarbs, 'estimatedCarbs', language),
+        estimatedFat: toFiniteNumber(item.estimatedFat, 'estimatedFat', language),
       }))
 
       const totalCalories = items.reduce((sum, item) => sum + item.estimatedCalories * item.servings, 0)
@@ -2029,7 +2359,9 @@ export async function executeToolCall(
       return {
         success: true,
         plannedMeal: savedMeal,
-        hint: '已生成建议，等待用户确认。用户说"好的"或"就这样吧"时请调用 confirm_meal_plan 确认。',
+        hint: language === 'zh'
+          ? '已生成建议，等待用户确认。用户说"好的"或"就这样吧"时请调用 confirm_meal_plan 确认。'
+          : 'Suggestion created and awaiting user confirmation. When the user says "sounds good" or "go with that", call confirm_meal_plan to confirm.',
       }
     }
 
@@ -2038,13 +2370,21 @@ export async function executeToolCall(
       const action = String(args.action ?? '')
 
       if (!Number.isInteger(plannedMealId)) {
-        throw new Error('plannedMealId 参数无效。')
+        throw new Error(languageMessage(
+          language,
+          'plannedMealId 参数无效。',
+          'Invalid plannedMealId parameter.',
+        ))
       }
 
       if (action === 'delete') {
         const deleted = await deletePlannedMeal(plannedMealId)
         if (!deleted) {
-          throw new Error('没有找到对应的计划用餐记录。')
+          throw new Error(languageMessage(
+            language,
+            '没有找到对应的计划用餐记录。',
+            'No matching planned meal record was found.',
+          ))
         }
         return { success: true, action: 'deleted' }
       }
@@ -2056,12 +2396,20 @@ export async function executeToolCall(
 
       const newStatus = statusMap[action]
       if (!newStatus) {
-        throw new Error('action 参数无效，可选值：confirm / skip / delete。')
+        throw new Error(languageMessage(
+          language,
+          'action 参数无效，可选值：confirm / skip / delete。',
+          'Invalid action parameter. Options: confirm / skip / delete.',
+        ))
       }
 
       const updatedMeal = await updatePlannedMealStatus(plannedMealId, newStatus)
       if (!updatedMeal) {
-        throw new Error('没有找到对应的计划用餐记录。')
+        throw new Error(languageMessage(
+          language,
+          '没有找到对应的计划用餐记录。',
+          'No matching planned meal record was found.',
+        ))
       }
 
       return {
@@ -2074,7 +2422,11 @@ export async function executeToolCall(
     case 'get_meal_plans': {
       const date = String(args.date ?? '').trim()
       if (!date) {
-        throw new Error('缺少 date 参数。')
+        throw new Error(languageMessage(
+          language,
+          '缺少 date 参数。',
+          'Missing date parameter.',
+        ))
       }
 
       const meals = await getPlannedMealsForDate(date)
@@ -2086,6 +2438,10 @@ export async function executeToolCall(
     }
 
     default:
-      throw new Error(`未知工具：${toolCall.name}`)
+      throw new Error(languageMessage(
+        language,
+        `未知工具：${toolCall.name}`,
+        `Unknown tool: ${toolCall.name}`,
+      ))
   }
 }

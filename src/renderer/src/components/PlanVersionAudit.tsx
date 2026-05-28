@@ -10,6 +10,7 @@ import {
   getPlanVersionDiff,
 } from '../planning/engine'
 import type { PersonalDietPlan } from '../stores/planning'
+import { useI18n } from '../i18n'
 import './PlanVersionAudit.css'
 
 const { Paragraph, Text, Title } = Typography
@@ -18,8 +19,8 @@ interface PlanVersionAuditProps {
   plans: PersonalDietPlan[]
 }
 
-function formatTimestamp(value: string): string {
-  return new Date(value).toLocaleString('zh-CN')
+function formatTimestamp(value: string, language: 'en' | 'zh'): string {
+  return new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')
 }
 
 function formatVersionLabel(versionNumber: number): string {
@@ -27,6 +28,8 @@ function formatVersionLabel(versionNumber: number): string {
 }
 
 function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
+  const { language } = useI18n()
+  const l = (zh: string, en: string): string => (language === 'zh' ? zh : en)
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(plans[0]?.id ?? null)
 
   useEffect(() => {
@@ -41,22 +44,22 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
   )
   const selectedPlan = selectedIndex >= 0 ? plans[selectedIndex] : plans[0] ?? null
   const previousPlan = selectedIndex >= 0 && selectedIndex < plans.length - 1 ? plans[selectedIndex + 1] : null
-  const diff = selectedPlan ? getPlanVersionDiff(selectedPlan, previousPlan) : null
+  const diff = selectedPlan ? getPlanVersionDiff(selectedPlan, previousPlan, language) : null
 
   return (
     <Card
       className="plan-version-card"
-      title="计划版本审计"
+      title={l('计划版本审计', 'Plan Version Audit')}
       extra={
         <Tag color="processing" bordered={false}>
-          共 {plans.length} 版
+          {l('共', '')} {plans.length} {l('版', plans.length === 1 ? 'version' : 'versions')}
         </Tag>
       }
     >
       {plans.length === 0 || !selectedPlan ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="还没有可审计的计划版本"
+          description={l('还没有可审计的计划版本', 'No auditable plan versions yet')}
         />
       ) : (
         <div className="plan-version-shell">
@@ -76,12 +79,12 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
                       color={plan.generationMode === 'ai' ? 'success' : 'default'}
                       bordered={false}
                     >
-                      {plan.generationMode === 'ai' ? 'AI' : '本地'}
+                      {plan.generationMode === 'ai' ? 'AI' : l('本地', 'Local')}
                     </Tag>
                   </div>
                   <Text className="plan-version-item-title">{plan.title}</Text>
                   <Text type="secondary" className="plan-version-item-meta">
-                    {formatTimestamp(plan.createdAt)}
+                    {formatTimestamp(plan.createdAt, language)}
                   </Text>
                 </button>
               )
@@ -95,16 +98,16 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
                   {selectedPlan.title}
                 </Title>
                 <Text type="secondary">
-                  {formatTimestamp(selectedPlan.createdAt)}
+                  {formatTimestamp(selectedPlan.createdAt, language)}
                 </Text>
               </div>
               <div className="plan-version-detail-tags">
                 <Tag icon={<HistoryOutlined />} color="processing" bordered={false}>
-                  {getPlanGenerationLabel(selectedPlan)}
+                  {getPlanGenerationLabel(selectedPlan, language)}
                 </Tag>
                 {typeof selectedPlan.sourceSessionId === 'number' && (
                   <Tag icon={<ProfileOutlined />} color="default" bordered={false}>
-                    会话 #{selectedPlan.sourceSessionId}
+                    {l('会话', 'Session')} #{selectedPlan.sourceSessionId}
                   </Tag>
                 )}
               </div>
@@ -112,19 +115,19 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
 
             <div className="plan-version-metrics">
               <div className="plan-version-metric">
-                <Text type="secondary">热量</Text>
+                <Text type="secondary">{l('热量', 'Calories')}</Text>
                 <strong>{selectedPlan.dailyCalorieTarget} kcal</strong>
               </div>
               <div className="plan-version-metric">
-                <Text type="secondary">蛋白质</Text>
+                <Text type="secondary">{l('蛋白质', 'Protein')}</Text>
                 <strong>{selectedPlan.proteinTarget} g</strong>
               </div>
               <div className="plan-version-metric">
-                <Text type="secondary">碳水</Text>
+                <Text type="secondary">{l('碳水', 'Carbs')}</Text>
                 <strong>{selectedPlan.carbsTarget} g</strong>
               </div>
               <div className="plan-version-metric">
-                <Text type="secondary">脂肪</Text>
+                <Text type="secondary">{l('脂肪', 'Fat')}</Text>
                 <strong>{selectedPlan.fatTarget} g</strong>
               </div>
             </div>
@@ -134,7 +137,7 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
             </Paragraph>
 
             <div className="plan-version-detail-block">
-              <Text strong>关键提醒</Text>
+              <Text strong>{l('关键提醒', 'Key Cautions')}</Text>
               {selectedPlan.cautionNotes.length > 0 ? (
                 <div className="plan-version-note-list">
                   {selectedPlan.cautionNotes.map((item) => (
@@ -146,17 +149,17 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
                 </div>
               ) : (
                 <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                  当前版本没有额外提醒。
+                  {l('当前版本没有额外提醒。', 'This version has no extra cautions.')}
                 </Paragraph>
               )}
             </div>
 
             <div className="plan-version-detail-block">
               <div className="plan-version-compare-head">
-                <Text strong>版本差异</Text>
+                <Text strong>{l('版本差异', 'Version Changes')}</Text>
                 {previousPlan && (
                   <Tag icon={<SwapOutlined />} color="warning" bordered={false}>
-                    相比 {formatVersionLabel(plans.length - (selectedIndex + 1))}
+                    {l('相比', 'Compared with')} {formatVersionLabel(plans.length - (selectedIndex + 1))}
                   </Tag>
                 )}
               </div>
@@ -169,7 +172,7 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
 
                   {diff.metricChanges.length > 0 && (
                     <div className="plan-version-change-group">
-                      <Text strong>目标调整</Text>
+                      <Text strong>{l('目标调整', 'Target Changes')}</Text>
                       <div className="plan-version-change-tags">
                         {diff.metricChanges.map((change) => (
                           <Tag
@@ -189,7 +192,7 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
 
                   {diff.profileChanges.length > 0 && (
                     <div className="plan-version-change-group">
-                      <Text strong>档案变更</Text>
+                      <Text strong>{l('档案变更', 'Profile Changes')}</Text>
                       <div className="plan-version-profile-list">
                         {diff.profileChanges.map((change) => (
                           <div key={change.key} className="plan-version-profile-item">
@@ -205,13 +208,19 @@ function PlanVersionAudit({ plans }: PlanVersionAuditProps): JSX.Element {
 
                   {diff.metricChanges.length === 0 && diff.profileChanges.length === 0 && (
                     <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      当前版本和上一版在结构化目标上没有变化，主要差异集中在文案表达与提醒补充。
+                      {l(
+                        '当前版本和上一版在结构化目标上没有变化，主要差异集中在文案表达与提醒补充。',
+                        'This version has no structured target changes from the previous one; differences are mainly wording and reminder details.',
+                      )}
                     </Paragraph>
                   )}
                 </>
               ) : (
                 <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                  这是当前可追溯的首个计划版本，后续每次重新生成都会在这里留下可比对记录。
+                  {l(
+                    '这是当前可追溯的首个计划版本，后续每次重新生成都会在这里留下可比对记录。',
+                    'This is the first traceable plan version. Future regenerations will leave comparable records here.',
+                  )}
                 </Paragraph>
               )}
             </div>

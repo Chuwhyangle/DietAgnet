@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Routes, Route } from 'react-router-dom'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 
 // Mock stores used by pages and layout
 vi.mock('../stores/dietLog', () => ({
@@ -41,6 +41,7 @@ vi.mock('../stores/dietLog', () => ({
 
 vi.mock('../stores/settings', () => ({
   getSettings: vi.fn().mockReturnValue({
+    language: 'zh',
     nickname: '测试用户',
     calorieGoal: 2000,
     onboarded: true,
@@ -52,6 +53,30 @@ vi.mock('../stores/settings', () => ({
     memoryPostChatPendingMinConfidence: 0.52,
   }),
   saveSettings: vi.fn(),
+}))
+
+vi.mock('../i18n', () => ({
+  I18nProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DomTranslationBridge: () => null,
+  useI18n: () => {
+    const translations: Record<string, string> = {
+      'app.loading': '加载中...',
+      'layout.brand': '猫猫虫',
+      'layout.subtitle': '饮食小助手',
+      'layout.home': '首页',
+      'layout.recipes': '菜谱',
+      'layout.dietLog': '饮食记录',
+      'layout.chat': 'AI 对话',
+      'layout.settings': '设置',
+      'layout.footer': '吃好喝好，健康长大喵~',
+    }
+
+    return {
+      language: 'zh',
+      setLanguage: () => undefined,
+      t: (key: string) => translations[key] ?? key,
+    }
+  },
 }))
 
 vi.mock('../stores/planning', () => ({

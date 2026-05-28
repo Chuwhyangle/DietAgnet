@@ -7,7 +7,10 @@ import {
 } from '../../../shared/agent'
 import { emitSettingsUpdated } from './events'
 
+export type AppLanguage = 'en' | 'zh'
+
 export interface Settings {
+  language: AppLanguage
   nickname: string
   calorieGoal?: number
   onboarded?: boolean
@@ -44,6 +47,7 @@ export interface ReminderSettings {
 const SETTINGS_KEY = 'diet-agent-settings'
 
 const defaultSettings: Settings = {
+  language: 'en',
   nickname: '',
   calorieGoal: 2000,
   onboarded: false,
@@ -101,6 +105,10 @@ function clampUnitInterval(value: number, fallback: number): number {
   return Math.min(0.95, Math.max(0.3, value))
 }
 
+function normalizeLanguage(raw?: unknown): AppLanguage {
+  return raw === 'zh' ? 'zh' : 'en'
+}
+
 function normalizeSettings(raw?: Partial<Settings> | null): Settings {
   const autoConf = clampUnitInterval(
     Number(raw?.memoryPostChatAutoConfidence),
@@ -115,6 +123,7 @@ function normalizeSettings(raw?: Partial<Settings> | null): Settings {
   }
 
   return {
+    language: normalizeLanguage(raw?.language),
     nickname: raw?.nickname?.trim() ?? defaultSettings.nickname,
     calorieGoal: raw?.calorieGoal ?? defaultSettings.calorieGoal,
     onboarded: raw?.onboarded === true,

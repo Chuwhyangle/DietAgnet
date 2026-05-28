@@ -9,39 +9,11 @@ import {
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import AgentChat from './AgentChat'
-import AgentChatWorkspace from './AgentChatWorkspace'
 import ProactiveReminder from '../proactive/ProactiveReminder'
+import { useI18n } from '../i18n'
 import './Layout.css'
 
 const { Sider, Content } = Layout
-
-const menuItems = [
-  {
-    key: '/',
-    icon: <HomeOutlined />,
-    label: '🏠 首页',
-  },
-  {
-    key: '/recipes',
-    icon: <BookOutlined />,
-    label: '🍳 菜谱',
-  },
-  {
-    key: '/diet-log',
-    icon: <EditOutlined />,
-    label: '📝 饮食记录',
-  },
-  {
-    key: '/chat',
-    icon: <MessageOutlined />,
-    label: '🤖 AI 对话',
-  },
-  {
-    key: '/settings',
-    icon: <SettingOutlined />,
-    label: '⚙️ 设置',
-  },
-]
 
 interface AppLayoutProps {
   children: ReactNode
@@ -50,8 +22,35 @@ interface AppLayoutProps {
 function AppLayout({ children }: AppLayoutProps): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useI18n()
   const hideAgentChat = location.pathname === '/settings' || location.pathname === '/chat'
-  const showChatWorkspace = location.pathname === '/chat'
+  const menuItems = [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: `🏠 ${t('layout.home')}`,
+    },
+    {
+      key: '/recipes',
+      icon: <BookOutlined />,
+      label: `🍳 ${t('layout.recipes')}`,
+    },
+    {
+      key: '/diet-log',
+      icon: <EditOutlined />,
+      label: `📝 ${t('layout.dietLog')}`,
+    },
+    {
+      key: '/chat',
+      icon: <MessageOutlined />,
+      label: `🤖 ${t('layout.chat')}`,
+    },
+    {
+      key: '/settings',
+      icon: <SettingOutlined />,
+      label: `⚙️ ${t('layout.settings')}`,
+    },
+  ]
 
   return (
     <Layout className="app-shell">
@@ -62,8 +61,8 @@ function AppLayout({ children }: AppLayoutProps): JSX.Element {
       >
         <div className="logo-area">
           <span className="logo-emoji">🐛</span>
-          <span className="logo-text">猫猫虫</span>
-          <span className="logo-sub">饮食小助手</span>
+          <span className="logo-text">{t('layout.brand')}</span>
+          <span className="logo-sub">{t('layout.subtitle')}</span>
         </div>
         <Menu
           mode="inline"
@@ -73,14 +72,11 @@ function AppLayout({ children }: AppLayoutProps): JSX.Element {
           className="cat-menu"
         />
         <div className="sider-footer">
-          <span>🐾 吃好喝好，健康长大喵~</span>
+          <span>🐾 {t('layout.footer')}</span>
         </div>
       </Sider>
       <Content className="cat-content">
         {children}
-        <div className="agent-chat-workspace-container" style={{ display: showChatWorkspace ? 'block' : 'none' }}>
-          <AgentChatWorkspace />
-        </div>
       </Content>
       <ProactiveReminder />
       <AgentChat hidden={hideAgentChat} />

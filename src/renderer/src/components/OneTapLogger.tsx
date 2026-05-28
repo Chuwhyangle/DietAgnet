@@ -18,6 +18,8 @@ import { getCoachingSettings } from '../coaching/trustDial'
 import { getUserMemories } from '../stores/planning'
 import { estimateFromPhoto } from '../coaching/photoLogParser'
 import { estimateFromText } from '../coaching/textLogParser'
+import { localizeRecipe } from '../data/recipeTranslations.en'
+import { useI18n } from '../i18n'
 import type {
   OneTapLogError,
   PhotoEstimateResult,
@@ -84,6 +86,7 @@ interface PreviewState {
 // ---------------------------------------------------------------------------
 
 function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
+  const { language, t } = useI18n()
   const [textInput, setTextInput] = useState('')
   const [loading, setLoading] = useState<string | null>(null) // 'photo' | 'text' | 'yesterday' | chipId
   const [preview, setPreview] = useState<PreviewState | null>(null)
@@ -106,15 +109,15 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
 
   const handleError = useCallback((error: OneTapLogError) => {
     const errorMessages: Record<string, string> = {
-      estimateInconsistent: '营养数据不一致，请手动调整',
-      lowConfidence: '识别置信度太低，请换个角度或手动输入',
-      visionUnsupported: '当前模型不支持图片识别',
+      estimateInconsistent: language === 'zh' ? '营养数据不一致，请手动调整' : 'Nutrition data looks inconsistent. Please adjust manually.',
+      lowConfidence: language === 'zh' ? '识别置信度太低，请换个角度或手动输入' : 'Confidence is too low. Try another angle or enter it manually.',
+      visionUnsupported: language === 'zh' ? '当前模型不支持图片识别' : 'The current model does not support image recognition.',
       allergyConflict: error.reason,
-      noYesterdayMeal: '昨天这一餐没有记录',
-      parseError: '解析失败，请重试',
+      noYesterdayMeal: language === 'zh' ? '昨天这一餐没有记录' : 'No entry exists for this meal yesterday.',
+      parseError: language === 'zh' ? '解析失败，请重试' : 'Parsing failed. Please try again.',
     }
     message.error(errorMessages[error.code] || error.reason)
-  }, [])
+  }, [language])
 
   // ---------------------------------------------------------------------------
   // Photo flow
@@ -167,7 +170,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         )
 
         if (logResult.success && logResult.dietLog) {
-          message.success('📷 照片识别已自动记录！')
+          message.success(language === 'zh' ? '📷 照片识别已自动记录！' : '📷 Photo estimate saved automatically.')
         } else if (logResult.error) {
           handleError(logResult.error)
         }
@@ -191,7 +194,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         })
       }
     } catch (err) {
-      message.error('照片处理失败，请重试')
+      message.error(language === 'zh' ? '照片处理失败，请重试' : 'Photo processing failed. Please try again.')
       setPhotoPreviewUrl(null)
     } finally {
       setLoading(null)
@@ -205,7 +208,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
   const handleTextSubmit = useCallback(async () => {
     const text = textInput.trim()
     if (!text) {
-      message.warning('请输入食物描述')
+      message.warning(language === 'zh' ? '请输入食物描述' : 'Please describe the food.')
       return
     }
 
@@ -233,7 +236,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         )
 
         if (logResult.success && logResult.dietLog) {
-          message.success('✏️ 文字识别已自动记录！')
+          message.success(language === 'zh' ? '✏️ 文字识别已自动记录！' : '✏️ Text estimate saved automatically.')
           setTextInput('')
         } else if (logResult.error) {
           handleError(logResult.error)
@@ -257,7 +260,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         })
       }
     } catch (err) {
-      message.error('文字识别失败，请重试')
+      message.error(language === 'zh' ? '文字识别失败，请重试' : 'Text recognition failed. Please try again.')
     } finally {
       setLoading(null)
     }
@@ -281,7 +284,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
       )
 
       if (result.success && result.dietLog) {
-        message.success('🔄 已复制昨天的记录！')
+        message.success(language === 'zh' ? '🔄 已复制昨天的记录！' : '🔄 Yesterday’s meal was copied.')
       } else if (result.error) {
         handleError(result.error)
       } else if (result.success && !result.dietLog) {
@@ -294,13 +297,13 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
           allergyMems,
         )
         if (retryResult.success && retryResult.dietLog) {
-          message.success('🔄 已复制昨天的记录！')
+          message.success(language === 'zh' ? '🔄 已复制昨天的记录！' : '🔄 Yesterday’s meal was copied.')
         } else if (retryResult.error) {
           handleError(retryResult.error)
         }
       }
     } catch (err) {
-      message.error('复制昨天记录失败')
+      message.error(language === 'zh' ? '复制昨天记录失败' : 'Could not copy yesterday’s entry.')
     } finally {
       setLoading(null)
     }
@@ -325,7 +328,8 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
 
       if (result.success && result.dietLog) {
         const recipe = recipes.find((r) => r.id === recipeId)
-        message.success(`${recipe?.emoji || '🍽️'} ${recipe?.name || '食物'}已记录！`)
+        const recipeName = recipe ? localizeRecipe(recipe, language).name : (language === 'zh' ? '食物' : 'food')
+        message.success(`${recipe?.emoji || '🍽️'} ${recipeName}${language === 'zh' ? '已记录！' : ' saved.'}`)
       } else if (result.error) {
         handleError(result.error)
       } else if (result.success && !result.dietLog) {
@@ -337,13 +341,14 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         )
         if (retryResult.success && retryResult.dietLog) {
           const recipe = recipes.find((r) => r.id === recipeId)
-          message.success(`${recipe?.emoji || '🍽️'} ${recipe?.name || '食物'}已记录！`)
+          const recipeName = recipe ? localizeRecipe(recipe, language).name : (language === 'zh' ? '食物' : 'food')
+          message.success(`${recipe?.emoji || '🍽️'} ${recipeName}${language === 'zh' ? '已记录！' : ' saved.'}`)
         } else if (retryResult.error) {
           handleError(retryResult.error)
         }
       }
     } catch (err) {
-      message.error('记录失败，请重试')
+      message.error(language === 'zh' ? '记录失败，请重试' : 'Logging failed. Please try again.')
     } finally {
       setLoading(null)
     }
@@ -371,14 +376,14 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         addMealItemToDietLog({ date, mealType, item: mealItem })
       }
 
-      message.success('✅ 已确认记录！')
+      message.success(language === 'zh' ? '✅ 已确认记录！' : '✅ Entry confirmed.')
       setPreview(null)
       setPhotoPreviewUrl(null)
       if (preview.source === 'text') {
         setTextInput('')
       }
     } catch (err) {
-      message.error('保存失败，请重试')
+      message.error(language === 'zh' ? '保存失败，请重试' : 'Save failed. Please try again.')
     }
   }, [preview, date, mealType])
 
@@ -394,7 +399,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
   return (
     <Card className="one-tap-logger" size="small">
       <div className="one-tap-logger-header">
-        <Text strong>⚡ 快速记录</Text>
+        <Text strong>⚡ {t('oneTap.title')}</Text>
       </div>
 
       <div className="one-tap-logger-entries">
@@ -404,9 +409,9 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
             icon={loading === 'photo' ? <LoadingOutlined /> : <CameraOutlined />}
             onClick={handlePhotoClick}
             disabled={loading !== null}
-            title="拍照识别食物"
+            title={t('oneTap.photoTitle')}
           >
-            📷 拍照
+            📷 {t('oneTap.photo')}
           </Button>
           <input
             ref={fileInputRef}
@@ -420,7 +425,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
         {/* Text input */}
         <div className="one-tap-entry one-tap-text">
           <Input.Search
-            placeholder="输入食物，如：一碗面条"
+            placeholder={t('oneTap.textPlaceholder')}
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             onSearch={() => void handleTextSubmit()}
@@ -429,7 +434,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
                 icon={loading === 'text' ? <LoadingOutlined /> : <EditOutlined />}
                 disabled={loading !== null}
               >
-                识别
+                {t('oneTap.recognize')}
               </Button>
             }
             disabled={loading !== null}
@@ -444,7 +449,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
             onClick={loading === null ? () => void handleSameAsYesterday() : undefined}
             icon={loading === 'yesterday' ? <LoadingOutlined /> : <SyncOutlined />}
           >
-            和昨天一样
+            {t('oneTap.sameYesterday')}
           </Tag>
         </div>
 
@@ -456,7 +461,7 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
               className="one-tap-chip one-tap-chip-food"
               onClick={loading === null ? () => void handleCommonChip(recipe.id) : undefined}
             >
-              {loading === recipe.id ? <LoadingOutlined /> : recipe.emoji} {recipe.name}
+              {loading === recipe.id ? <LoadingOutlined /> : recipe.emoji} {localizeRecipe(recipe, language).name}
             </Tag>
           ))}
         </div>
@@ -464,28 +469,30 @@ function OneTapLogger({ date, mealType }: OneTapLoggerProps): JSX.Element {
 
       {/* Preview modal for photo/text estimates */}
       <Modal
-        title="确认记录"
+        title={language === 'zh' ? '确认记录' : 'Confirm entry'}
         open={preview !== null}
         onOk={() => void handleConfirmPreview()}
         onCancel={handleCancelPreview}
-        okText="确认记录"
-        cancelText="取消"
+        okText={language === 'zh' ? '确认记录' : 'Confirm entry'}
+        cancelText={t('common.cancel')}
         className="one-tap-preview-modal"
       >
         {preview && (
           <div className="one-tap-preview">
             {photoPreviewUrl && (
               <div className="one-tap-preview-image">
-                <img src={photoPreviewUrl} alt="食物照片" />
+                <img src={photoPreviewUrl} alt={language === 'zh' ? '食物照片' : 'Food photo'} />
               </div>
             )}
 
             <div className="one-tap-preview-summary">
               <Text strong>
-                共 {preview.items.length} 项，约 {Math.round(preview.totalCalories)} kcal
+                {language === 'zh'
+                  ? `共 ${preview.items.length} 项，约 ${Math.round(preview.totalCalories)} kcal`
+                  : `${preview.items.length} item(s), about ${Math.round(preview.totalCalories)} kcal`}
               </Text>
               <Tag color={preview.confidence >= 0.7 ? 'green' : 'orange'}>
-                置信度 {Math.round(preview.confidence * 100)}%
+                {language === 'zh' ? '置信度' : 'Confidence'} {Math.round(preview.confidence * 100)}%
               </Tag>
             </div>
 

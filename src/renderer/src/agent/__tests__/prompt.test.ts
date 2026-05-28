@@ -18,6 +18,7 @@ import type { Settings } from '../../stores/settings'
 
 function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
+    language: 'zh',
     nickname: '小明',
     calorieGoal: 1800,
     onboarded: true,
@@ -169,5 +170,15 @@ describe('agent/prompt – buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(makeSettings())
 
     expect(prompt).toContain('2024-06-15')
+  })
+
+  it('uses Diet Agent and English response rules in English mode', async () => {
+    vi.setSystemTime(new Date('2024-06-15T10:00:00'))
+    const { buildSystemPrompt } = await import('../prompt')
+    const prompt = buildSystemPrompt(makeSettings({ language: 'en', nickname: '' }))
+
+    expect(prompt).toContain('Diet Agent')
+    expect(prompt).toContain('Reply in English by default')
+    expect(prompt).toContain('friend')
   })
 })

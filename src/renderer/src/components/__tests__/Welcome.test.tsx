@@ -19,7 +19,7 @@ describe('Welcome', () => {
   it('displays the initial greeting step', () => {
     const onFinish = vi.fn()
     render(<Welcome onFinish={onFinish} />)
-    expect(screen.getByText(/欢迎来到猫猫虫的小窝/)).toBeInTheDocument()
+    expect(screen.getByText(/Welcome to Diet Agent/)).toBeInTheDocument()
   })
 
   it('advances to the next step when the button is clicked', async () => {
@@ -27,11 +27,11 @@ describe('Welcome', () => {
     render(<Welcome onFinish={onFinish} />)
 
     const user = userEvent.setup()
-    const nextButton = screen.getByRole('button', { name: /认识一下/ })
+    const nextButton = screen.getByRole('button', { name: /Get started/ })
     await user.click(nextButton)
 
     // Should now show the nickname step
-    expect(screen.getByText(/猫猫虫该怎么称呼你呢/)).toBeInTheDocument()
+    expect(screen.getByText(/What should I call you/)).toBeInTheDocument()
   })
 
   it('calls onFinish when skip button is clicked', async () => {
@@ -39,7 +39,7 @@ describe('Welcome', () => {
     render(<Welcome onFinish={onFinish} />)
 
     const user = userEvent.setup()
-    const skipButton = screen.getByRole('button', { name: /跳过引导/ })
+    const skipButton = screen.getByRole('button', { name: /Skip onboarding/ })
     await user.click(skipButton)
 
     expect(onFinish).toHaveBeenCalled()

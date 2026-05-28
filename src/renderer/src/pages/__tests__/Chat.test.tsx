@@ -4,10 +4,14 @@
  * Validates: Requirements 6.2, 6.3, 6.4, 6.5, 6.7
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import ChatPage from '../Chat'
+
+vi.mock('../../components/AgentChatWorkspace', () => ({
+  default: () => <div data-testid="agent-chat-workspace" />,
+}))
 
 describe('ChatPage', () => {
   it('renders without throwing', () => {
@@ -19,21 +23,21 @@ describe('ChatPage', () => {
     expect(container).toBeTruthy()
   })
 
-  it('displays the page title', () => {
+  it('renders the chat workspace as the primary page content', () => {
     render(
       <MemoryRouter>
         <ChatPage />
       </MemoryRouter>,
     )
-    expect(screen.getByText('猫猫虫 AI 对话中心')).toBeInTheDocument()
+    expect(screen.getByTestId('agent-chat-workspace')).toBeInTheDocument()
   })
 
-  it('displays the page description', () => {
+  it('does not place an intro card above the chat workspace', () => {
     render(
       <MemoryRouter>
         <ChatPage />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/正式的对话工作区/)).toBeInTheDocument()
+    expect(screen.queryByText('猫猫虫 AI 对话中心')).not.toBeInTheDocument()
   })
 })

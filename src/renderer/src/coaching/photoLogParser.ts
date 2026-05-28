@@ -8,7 +8,7 @@
  */
 
 import type { AgentChatRequest, RemoteChatMessage } from '../../../shared/agent'
-import { getSettings } from '../stores/settings'
+import { getSettings, type AppLanguage } from '../stores/settings'
 import { writeAuditEntry } from './auditLog'
 import type {
   PhotoEstimateResult,
@@ -231,7 +231,7 @@ Rules:
 - The total calories/macros should approximately equal the sum of items
 - Return ONLY the JSON object, no other text`
 
-function buildVisionMessages(imageBase64: string): RemoteChatMessage[] {
+function buildVisionMessages(imageBase64: string, language: AppLanguage): RemoteChatMessage[] {
   // Determine the image MIME type from the base64 header or default to jpeg
   let dataUrl: string
   if (imageBase64.startsWith('data:')) {
@@ -254,7 +254,9 @@ function buildVisionMessages(imageBase64: string): RemoteChatMessage[] {
         },
         {
           type: 'text',
-          text: '请识别这张食物照片中的所有食物，并估算每种食物的营养成分。',
+          text: language === 'zh'
+            ? '请识别这张食物照片中的所有食物，并估算每种食物的营养成分。'
+            : 'Identify all foods in this photo and estimate the nutrition for each item.',
         },
       ]),
     },
@@ -287,16 +289,19 @@ export async function estimateFromPhoto(
 ): Promise<PhotoEstimateResult | OneTapLogError> {
   const settings = getSettings()
   const agentSettings = settings.agent
+  const language = settings.language === 'zh' ? 'zh' : 'en'
 
   // Check vision capability before sending
   if (!isLikelyVisionCapable(agentSettings.model)) {
     return {
       code: 'visionUnsupported',
-      reason: '当前模型不支持图片识别，请在设置中切换到支持视觉的模型（如 qwen-vl、gpt-4o 等）',
+      reason: language === 'zh'
+        ? '当前模型不支持图片识别，请在设置中切换到支持视觉的模型（如 qwen-vl、gpt-4o 等）'
+        : 'The current model does not support image recognition. Switch to a vision-capable model in Settings, such as qwen-vl or gpt-4o.',
     }
   }
 
-  const messages = buildVisionMessages(imageBase64)
+  const messages = buildVisionMessages(imageBase64, language)
 
   const request: AgentChatRequest = {
     settings: agentSettings,
@@ -314,12 +319,12 @@ export async function estimateFromPhoto(
     if (message.toLowerCase().includes('vision') || message.toLowerCase().includes('image')) {
       return {
         code: 'visionUnsupported',
-        reason: '当前模型不支持图片识别',
+        reason: language === 'zh' ? '当前模型不支持图片识别' : 'The current model does not support image recognition',
       }
     }
     return {
       code: 'parseError',
-      reason: `LLM 请求失败: ${message}`,
+      reason: language === 'zh' ? `LLM 请求失败: ${message}` : `LLM request failed: ${message}`,
     }
   }
 
@@ -328,7 +333,7 @@ export async function estimateFromPhoto(
   if (!content) {
     return {
       code: 'parseError',
-      reason: '模型返回了空内容',
+      reason: language === 'zh' ? '模型返回了空内容' : 'The model returned empty content',
     }
   }
 
@@ -345,7 +350,9 @@ export async function estimateFromPhoto(
   if ('code' in parseResult && parseResult.code === 'schemaValidationFailed') {
     return {
       code: 'parseError',
-      reason: `解析失败: ${parseResult.reason} (path: ${parseResult.offendingPath})`,
+      reason: language === 'zh'
+        ? `解析失败: ${parseResult.reason} (path: ${parseResult.offendingPath})`
+        : `Parsing failed: ${parseResult.reason} (path: ${parseResult.offendingPath})`,
       offendingPath: parseResult.offendingPath,
     }
   }

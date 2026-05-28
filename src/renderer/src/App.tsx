@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type AnimationEvent } from 'react'
 import { ConfigProvider, Spin, theme } from 'antd'
+import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from './components/Layout'
@@ -13,6 +14,7 @@ import {
   startBackgroundTickListener,
   startForegroundScheduler,
 } from './coaching/reminderScheduler'
+import { DomTranslationBridge, I18nProvider, useI18n } from './i18n'
 
 const HomePage = lazy(() => import('./pages/Home'))
 const RecipesPage = lazy(() => import('./pages/Recipes'))
@@ -82,7 +84,8 @@ function AnimatedRoutes(): JSX.Element {
   )
 }
 
-function App(): JSX.Element {
+function LocalizedApp(): JSX.Element {
+  const { language } = useI18n()
   const [showWelcome, setShowWelcome] = useState(() => !getSettings().onboarded)
 
   useEffect(() => {
@@ -104,7 +107,8 @@ function App(): JSX.Element {
   }, [])
 
   return (
-    <ConfigProvider theme={caterpillarTheme} locale={zhCN}>
+    <ConfigProvider theme={caterpillarTheme} locale={language === 'zh' ? zhCN : enUS}>
+      <DomTranslationBridge />
       <ErrorBoundary>
         {showWelcome && <Welcome onFinish={() => setShowWelcome(false)} />}
         <HashRouter>
@@ -114,6 +118,14 @@ function App(): JSX.Element {
         </HashRouter>
       </ErrorBoundary>
     </ConfigProvider>
+  )
+}
+
+function App(): JSX.Element {
+  return (
+    <I18nProvider>
+      <LocalizedApp />
+    </I18nProvider>
   )
 }
 

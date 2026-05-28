@@ -6,7 +6,7 @@
  */
 
 import type { AgentChatRequest, RemoteChatMessage } from '../../../shared/agent'
-import { getSettings } from '../stores/settings'
+import { getSettings, type AppLanguage } from '../stores/settings'
 import { writeAuditEntry } from './auditLog'
 import type {
   TextEstimateResult,
@@ -205,7 +205,7 @@ Rules:
 - If the description is vague or unrecognizable as food, set confidence below 0.5
 - Return ONLY the JSON object, no other text`
 
-function buildTextMessages(rawText: string): RemoteChatMessage[] {
+function buildTextMessages(rawText: string, language: AppLanguage): RemoteChatMessage[] {
   return [
     {
       role: 'system',
@@ -213,7 +213,9 @@ function buildTextMessages(rawText: string): RemoteChatMessage[] {
     },
     {
       role: 'user',
-      content: `请根据以下文字描述识别食物并估算营养成分：\n\n${rawText}`,
+      content: language === 'zh'
+        ? `请根据以下文字描述识别食物并估算营养成分：\n\n${rawText}`
+        : `Identify the food from the following text description and estimate its nutrition:\n\n${rawText}`,
     },
   ]
 }
@@ -233,8 +235,9 @@ export async function estimateFromText(
 ): Promise<TextEstimateResult | OneTapLogError> {
   const settings = getSettings()
   const agentSettings = settings.agent
+  const language = settings.language === 'zh' ? 'zh' : 'en'
 
-  const messages = buildTextMessages(rawText)
+  const messages = buildTextMessages(rawText, language)
 
   const request: AgentChatRequest = {
     settings: agentSettings,
@@ -250,7 +253,7 @@ export async function estimateFromText(
     const message = error instanceof Error ? error.message : String(error)
     return {
       code: 'parseError',
-      reason: `LLM 请求失败: ${message}`,
+      reason: language === 'zh' ? `LLM 请求失败: ${message}` : `LLM request failed: ${message}`,
     }
   }
 
@@ -259,7 +262,7 @@ export async function estimateFromText(
   if (!content) {
     return {
       code: 'parseError',
-      reason: '模型返回了空内容',
+      reason: language === 'zh' ? '模型返回了空内容' : 'The model returned empty content',
     }
   }
 
@@ -276,7 +279,9 @@ export async function estimateFromText(
   if ('code' in parseResult && parseResult.code === 'schemaValidationFailed') {
     return {
       code: 'parseError',
-      reason: `解析失败: ${parseResult.reason} (path: ${parseResult.offendingPath})`,
+      reason: language === 'zh'
+        ? `解析失败: ${parseResult.reason} (path: ${parseResult.offendingPath})`
+        : `Parsing failed: ${parseResult.reason} (path: ${parseResult.offendingPath})`,
       offendingPath: parseResult.offendingPath,
     }
   }
@@ -292,7 +297,9 @@ export async function estimateFromText(
 
     return {
       code: 'lowConfidence',
-      reason: '识别置信度太低，请换个描述方式或手动输入',
+      reason: language === 'zh'
+        ? '识别置信度太低，请换个描述方式或手动输入'
+        : 'Recognition confidence is too low. Try another description or enter it manually.',
       unrecognizedTokens: unrecognizedTokens.length > 0 ? unrecognizedTokens : [rawText],
     }
   }

@@ -114,7 +114,7 @@ describe('AgentActivity', () => {
     expect(screen.getByText('Agent Inbox')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Run Agent Check Now/ })).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText('还没有 Agent 活动。可以手动运行一次检查。')).toBeInTheDocument()
+      expect(screen.getByText('No Agent activity yet. You can run a manual check.')).toBeInTheDocument()
     })
   })
 
