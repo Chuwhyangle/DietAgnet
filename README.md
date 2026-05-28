@@ -1,8 +1,60 @@
 # Diet Agent
 
-一个基于 Electron + React + TypeScript 的桌面端饮食管理应用，围绕“猫猫虫”这个 AI 饮食小助手设计。项目把菜谱浏览、饮食记录、营养统计、AI 对话和引导式饮食计划整合在一个本地优先的桌面应用里，适合个人日常使用。
+一个基于 Electron + React + TypeScript 的桌面端饮食管理应用，围绕"猫猫虫"这个 AI 饮食小助手设计。项目把菜谱浏览、饮食记录、营养统计、AI 对话和引导式饮食计划整合在一个本地优先的桌面应用里，适合个人日常使用。
 
-当前项目已经完成桌面端 MVP 和 AI 引导式计划主线。下一阶段的产品方向，是让猫猫虫从“用户问才回答”的助手，升级为“能观察记录、判断偏差、主动建议”的饮食教练。
+当前项目已经完成桌面端 MVP 和 AI 引导式计划主线。下一阶段的产品方向，是让猫猫虫从"用户问才回答"的助手，升级为"能观察记录、判断偏差、主动建议"的饮食教练。
+
+## 📚 Assignment 2 评审入口
+
+如果你是来评审作业的，建议按下面顺序阅读：
+
+1. [`docs/assignment-report.md`](./docs/assignment-report.md) — Rubric 逐条对应 + Agentic 能力矩阵（10 分钟看完）
+2. [`docs/architecture.md`](./docs/architecture.md) — 系统架构 + Mermaid 时序图
+3. [`docs/evaluation.md`](./docs/evaluation.md) — 8 个示例任务 + 失败案例 + 性能数据
+4. [`docs/critical-reflection.md`](./docs/critical-reflection.md) — 限制、失败模式、设计取舍、未来改进
+5. 跑通 `npm install && npm run dev` 后参考 [§5 分钟 demo 跑通](#5-分钟-demo-跑通) 复现核心场景
+
+## 📷 应用截图
+
+> 截图占位区（请把对应文件放进 `docs/screenshots/` 后引用即可）：
+
+| 场景 | 截图 |
+|---|---|
+| 首页：今日卡路里 + 计划主线入口 | `docs/screenshots/home.png` |
+| Express Onboarding：60 秒生成专属计划 | `docs/screenshots/onboarding.png` |
+| AI 对话：工具调用 + 计划差值卡 | `docs/screenshots/chat.png` |
+| 饮食记录：周报 + 计划 vs 实际 | `docs/screenshots/dietlog.png` |
+| 设置：长期记忆 + 待确认 + 校准审计 | `docs/screenshots/settings.png` |
+| 主动提醒：未记录餐次浮层 | `docs/screenshots/proactive.png` |
+
+放置方式：录制时全屏截图，统一保存为 `docs/screenshots/{name}.png`，README 渲染时会自动显示。
+
+## 5 分钟 demo 跑通
+
+> 任何 reviewer 都可以在 ~5 分钟内复现核心 agentic 行为。
+
+```bash
+# 1. 安装依赖（首次约 1-2 分钟）
+npm install
+
+# 2. 启动应用
+npm run dev
+```
+
+启动后按下列步骤体验 7 个关键能力（对应 [`evaluation.md`](./docs/evaluation.md) 的 T1–T8）：
+
+| 步骤 | 操作 | 验证点 |
+|---|---|---|
+| ① 引导 | 跳过 Welcome → 首页 | 看到首页问候 + 计划主卡片 |
+| ② 配置 | 设置页 → AI 通道 → 填 DeepSeek/Qwen API Key → 测试连接 | 提示连接成功 + Tool 调用 OK |
+| ③ 生成计划 | 首页 → 一分钟开始减肥 → 填 5 个字段 | 生成 PersonalDietPlan（每日 kcal + 三餐比例） |
+| ④ 记录饮食 | AI 对话页 → "我中午吃了宫保鸡丁和米饭" | Agent 调用 `search_recipe`×2 + `add_meal`，午餐多两条 |
+| ⑤ 长期记忆 | "记一下，我对花生过敏" | `remember` 写入，设置页 → 长期记忆可见 |
+| ⑥ 推荐生效 | "晚上推荐两道清淡的菜" | Agent `recall` 后 `recommend_recipe`，结果不含花生菜 |
+| ⑦ 计划偏差 | 饮食记录页 → 午餐手动加 3 份意大利肉酱面 | 自动弹"减餐建议"卡，建议晚餐清淡 |
+| ⑧ 主动提醒 | 到下午 13:30 + 未记午餐时等 tick（或 DevTools 触发 `evaluateSchedulerTick`） | 浮层 "午餐还没记录呢" + 可选 OS 通知 |
+
+跑完上述 8 步即覆盖了 rubric 的所有关键 agentic 能力关键词（goal-directed / multi-step / tool use / memory / planning / proactive / decision making）。
 
 ## 功能亮点
 
@@ -190,6 +242,15 @@ Diet Agent/
 
 ## 相关文档
 
+### Assignment 2 评审材料
+
+- [作业总报告](./docs/assignment-report.md) — Rubric 逐条对应 + Agentic 能力矩阵
+- [系统架构](./docs/architecture.md) — Mermaid 架构图 + 时序图 + 模块职责表
+- [评测与示例任务](./docs/evaluation.md) — 8 个 example tasks + 失败案例 + 性能数据
+- [批判性反思](./docs/critical-reflection.md) — 限制 / 失败模式 / 设计取舍 / 未来改进
+
+### 产品与工程设计文档
+
 - [产品需求文档](./docs/PRD.md)
 - [Agent 对话设计](./docs/agent-chat-design.md)
 - [AI 引导式计划设计](./docs/planning-flow-design.md)
@@ -197,6 +258,7 @@ Diet Agent/
 - [菜谱热量校准与数据治理设计](./docs/recipe-data-governance.md)
 - [v0.5 扩展设计](./docs/v0.5-extension-plan.md)
 - [开发日志](./docs/development-log.md)
+- [测试体系指南](./TESTING.md)
 
 ## 当前范围
 
