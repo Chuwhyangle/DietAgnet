@@ -1,5 +1,84 @@
 # Diet Agent
 
+**Languages:** [English](#english) | [中文](#中文)
+
+## English
+
+Diet Agent is a local-first desktop diet coaching agent built with Electron, React, TypeScript, Ant Design, and Dexie. It combines recipe browsing, diet logging, nutrition tracking, AI chat, personalized planning, long-term memory, and proactive reminders in one desktop application.
+
+The project is designed to solve three common diet-tracking problems:
+
+1. Diet logging is often tedious and easy to abandon.
+2. Static diet plans do not adapt when the user eats more or less than expected.
+3. Most apps do not remember personal constraints such as allergies, dislikes, or schedule habits.
+
+Diet Agent addresses these problems as an agent rather than a simple chatbot. It can read the user's current plan, call local tools, log meals, remember user facts, compare actual intake against daily targets, and generate personalized suggestions.
+
+### Demo Video
+
+- [2-minute demo video](https://raw.githubusercontent.com/Chuwhyangle/DietAgnet/main/docs/demo/diet-agent-demo.mp4)
+- [Subtitle file (.srt)](./docs/demo/diet-agent-demo.srt)
+
+The demo shows the core workflow: plan, log, remember, compare, and adjust.
+
+### Reproduction Instructions
+
+```bash
+git clone https://github.com/Chuwhyangle/DietAgnet.git
+cd DietAgnet
+npm install
+npm run dev
+```
+
+Requirements:
+
+- Node.js 20 or newer
+- npm
+- Optional: an OpenAI Chat Completions compatible API key for AI Chat and tool calling
+
+After launching the app, reproduce the demo workflow:
+
+1. Open the Home page and check the daily calorie target or current diet plan.
+2. Open AI Chat and enter `I had kung pao chicken and rice for lunch.`
+3. Open Diet Log and confirm that the meal record and daily intake have been updated.
+4. Return to AI Chat and enter `Remember that I am allergic to peanuts.`
+5. Enter `Recommend a light dinner for tonight.`
+6. Open Diet Log again and compare actual intake with the daily target.
+
+### How to Use
+
+1. Use Home to create or review a personal diet plan.
+2. Use Quick Log, Diet Log, or AI Chat to record meals.
+3. Use AI Chat to ask questions, log food, request recommendations, or save preferences.
+4. Use Settings to configure the model provider, API key, language, long-term memory, proactive reminders, and daily calorie target.
+5. Use Settings -> Language to switch between English and Chinese.
+6. Use Diet Log to review intake vs target and adjust later meals.
+
+### Key Agent Features
+
+- **Goal-directed planning:** creates or reads a personal calorie plan.
+- **Tool use:** logs meals, searches recipes, reads nutrition data, updates settings, and manages memory through local tools.
+- **Long-term memory:** stores allergies, preferences, avoidances, habits, schedule notes, and goals.
+- **Personalized recommendations:** combines plan context with memory before recommending meals.
+- **Dynamic adjustment:** compares actual intake with the daily target and suggests gentle corrections.
+- **Proactive reminders:** uses quiet hours, cooldowns, and dismiss history to reduce noisy reminders.
+- **Local-first storage:** diet logs, plans, memories, settings, and audit records are stored locally.
+- **Bilingual interface:** supports English and Chinese in the UI, Agent prompt, tool descriptions, status messages, and recipe names.
+
+### Development Checkpoints
+
+The Git history contains staged checkpoints that show design evolution and implementation progress, including:
+
+- Initial project scaffold
+- README and assignment documentation
+- v0.5 extension plan for memory, proactive behavior, and RAG
+- Recipe library expansion and page transitions
+- Proactive dietary coaching agent MVP
+- English and Chinese language mode
+- Demo video and reproduction guide
+
+## 中文
+
 一个基于 Electron + React + TypeScript 的桌面端饮食管理应用，围绕"猫猫虫"这个 AI 饮食小助手设计。项目把菜谱浏览、饮食记录、营养统计、AI 对话和引导式饮食计划整合在一个本地优先的桌面应用里，适合个人日常使用。
 
 当前项目已经完成桌面端 MVP 和 AI 引导式计划主线。下一阶段的产品方向，是让猫猫虫从"用户问才回答"的助手，升级为"能观察记录、判断偏差、主动建议"的饮食教练。
