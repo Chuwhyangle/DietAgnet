@@ -1,0 +1,76 @@
+1
+00:00:00,000 --> 00:00:01,533
+Diet Agent a local-first desktop diet coaching agent.
+
+2
+00:00:01,533 --> 00:00:04,966
+This is the plan and personal information block
+
+3
+00:00:04,966 --> 00:00:08,400
+This here outlines the general direction of the plan.
+
+4
+00:00:08,400 --> 00:00:11,833
+You can set personal information and goals here.
+
+5
+00:00:15,200 --> 00:00:17,000
+You can make modifications here, ...
+
+6
+00:00:17,400 --> 00:00:32,966
+The LLM will reorganize the plan for you based on the information you provide. 
+
+7
+00:00:33,000 --> 00:00:42,133
+Here is the new plan, the new daily goals
+
+8
+00:00:43,166 --> 00:00:46,966
+You can also set daily goals for yourself
+
+9
+00:00:47,600 --> 00:00:59,600
+This is where you set up API interfaces, language, notifications, and other settings. 
+
+10
+00:01:01,766 --> 00:01:07,633
+Here is our menu, with many common dishes, more than 130 kinds. 
+
+11
+00:01:07,633 --> 00:01:11,600
+You can also add your own, just describe it to the Agent. 
+
+12
+00:01:14,366 --> 00:01:18,333
+This is our Agent chat window.
+
+13
+00:01:19,100 --> 00:01:24,066
+Next, I will briefly demonstrate how to plan a daily schedule.
+
+14
+00:01:24,066 --> 00:01:29,400
+The intermediate Agent will use tools and memory to solve problems based on the user's needs. 
+
+15
+00:01:51,566 --> 00:01:55,000
+Here is our daily schedule. 
+
+16
+00:01:55,000 --> 00:01:58,433
+And our weekly records 
+
+17
+00:01:58,500 --> 00:02:03,366
+Of course, if you don't want to eat according to the plan, the Agent will notice the inconsistency and will remind you whether you want to make a change.
+
+18
+00:02:03,366 --> 00:02:04,833
+There are still many, many small features that have not been included due to time constraints.
+
+19
+00:02:04,833 --> 00:02:05,433
+Thanks! 
+

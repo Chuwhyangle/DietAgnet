@@ -14,6 +14,41 @@
 4. [`docs/critical-reflection.md`](./docs/critical-reflection.md) — 限制、失败模式、设计取舍、未来改进
 5. 跑通 `npm install && npm run dev` 后参考 [§5 分钟 demo 跑通](#5-分钟-demo-跑通) 复现核心场景
 
+## 🎬 Demo Video
+
+- [2-minute demo video](./docs/demo/diet-agent-demo.mp4)
+- [Subtitle file (.srt)](./docs/demo/diet-agent-demo.srt)
+
+视频展示了 Diet Agent 的核心目标和工作流程：降低饮食记录成本、根据个人计划记录餐食、保存长期记忆，并结合当天摄入情况给出个性化建议。
+
+## ✅ Reproduction Instructions
+
+```bash
+git clone https://github.com/Chuwhyangle/DietAgnet.git
+cd DietAgnet
+npm install
+npm run dev
+```
+
+运行后可按以下步骤复现视频中的核心功能：
+
+1. 在 Home 页面查看每日热量目标和当前饮食计划。
+2. 进入 AI Chat，输入 `I had kung pao chicken and rice for lunch.`，让 Agent 从自然语言记录午餐。
+3. 切到 Diet Log 页面，确认午餐记录和当天摄入统计已经更新。
+4. 回到 AI Chat，输入 `Remember that I am allergic to peanuts.`，保存长期记忆。
+5. 输入 `Recommend a light dinner for tonight.`，查看 Agent 如何结合计划和记忆给出个性化推荐。
+6. 在 Diet Log 页面查看实际摄入与 daily target 的对比。
+
+AI Chat 需要在 Settings 页面配置 OpenAI Chat Completions 兼容的模型服务，例如 DeepSeek、通义千问或自定义兼容接口。基础菜谱浏览、饮食记录、统计和本地计划页面可直接运行。
+
+## 🧭 How to Use
+
+1. 在 Home 页面创建或查看个人饮食计划。
+2. 通过 Quick Log、Diet Log 或 AI Chat 记录餐食。
+3. 在 AI Chat 中用自然语言查询、记录、推荐或保存偏好。
+4. 在 Settings 页面配置模型、长期记忆、主动提醒和每日热量目标。
+5. 在 Diet Log 页面查看 intake vs target，并根据系统建议调整后续餐食。
+
 ## 📷 应用截图
 
 > 截图占位区（请把对应文件放进 `docs/screenshots/` 后引用即可）：
