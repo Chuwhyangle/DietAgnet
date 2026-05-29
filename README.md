@@ -16,7 +16,7 @@
 
 ## 🎬 Demo Video
 
-- [2-minute demo video](./docs/demo/diet-agent-demo.mp4)
+- [2-minute demo video](https://raw.githubusercontent.com/Chuwhyangle/DietAgnet/main/docs/demo/diet-agent-demo.mp4)
 - [Subtitle file (.srt)](./docs/demo/diet-agent-demo.srt)
 
 视频展示了 Diet Agent 的核心目标和工作流程：降低饮食记录成本、根据个人计划记录餐食、保存长期记忆，并结合当天摄入情况给出个性化建议。
