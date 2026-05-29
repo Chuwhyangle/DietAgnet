@@ -47,7 +47,8 @@ AI Chat 需要在 Settings 页面配置 OpenAI Chat Completions 兼容的模型�
 2. 通过 Quick Log、Diet Log 或 AI Chat 记录餐食。
 3. 在 AI Chat 中用自然语言查询、记录、推荐或保存偏好。
 4. 在 Settings 页面配置模型、长期记忆、主动提醒和每日热量目标。
-5. 在 Diet Log 页面查看 intake vs target，并根据系统建议调整后续餐食。
+5. 在 Settings → Language 中切换 English / 中文，界面和 Agent 回复会同步切换。
+6. 在 Diet Log 页面查看 intake vs target，并根据系统建议调整后续餐食。
 
 ## 📷 应用截图
 
@@ -101,6 +102,7 @@ npm run dev
 - 拍照识别食物（有限范围）：通过 OpenAI 兼容的视觉模型（如 Qwen-VL、GPT-4o）经由现有 chat-completions 代理估算食物热量与宏量营养。不引入原生 CV 管线、不捆绑离线图像模型、不持久化原始图片字节。
 - 信任旋钮（Trust Dial）：`autopilot` 模式下高置信度估算自动保存，`precision` 模式下每条记录需确认。默认 autopilot，随时可切换。
 - AI 对话：内置“猫猫虫”聊天入口，可通过兼容 OpenAI Chat Completions 的模型服务执行工具调用。
+- 中英文切换：Settings 页面提供 English / 中文切换，覆盖主要界面、Agent system prompt、工具描述、状态提示和菜谱名称本地化。
 - 库外食物估算：如果用户吃了菜谱库里没有的食物，Agent 可按描述估算份量、热量和宏量营养，并保存为本地自定义食物供后续复用。
 - AI 引导式计划：逐步采集年龄、身高、体重、目标、作息与偏好，生成专属饮食计划。
 - 异常追问与审计：对异常 BMI、目标差距、餐次等情况继续追问，并保留计划版本对比。
