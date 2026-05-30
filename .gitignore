@@ -8,6 +8,8 @@ Thumbs.db
 
 # Generated artifacts
 output/
+test-results/
+tmp/
 
 # Local data caches (raw downloads etc.)
 data/raw/

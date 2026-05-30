@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Col, Row, Statistic, Tag, Typography, message } from 'antd'
+import { Button, Card, Col, Empty, Row, Statistic, Tag, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import {
   BookOutlined,
+  CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CoffeeOutlined,
@@ -21,10 +22,12 @@ import {
   getLatestDailyPlanAdjustment,
   getLatestActivePlanningSession,
   getLatestPersonalDietPlan,
+  getPlannedMealsForDate,
   getRecentPersonalDietPlans,
   updateDailyPlanAdjustmentResponse,
   type DailyPlanAdjustment,
   type PersonalDietPlan,
+  type PlannedMeal,
   type PlanningProfile,
   type PlanningSession,
 } from '../stores/planning'
@@ -90,6 +93,65 @@ function getMealTypeLabel(mealType: string, language: 'en' | 'zh'): string {
   return labels[mealType as keyof typeof labels] ?? mealType
 }
 
+const PLANNED_MEAL_ORDER: Array<PlannedMeal['mealType']> = ['breakfast', 'lunch', 'dinner', 'snack']
+
+function sortPlannedMeals(meals: PlannedMeal[]): PlannedMeal[] {
+  return [...meals].sort((left, right) => {
+    const leftOrder = PLANNED_MEAL_ORDER.indexOf(left.mealType)
+    const rightOrder = PLANNED_MEAL_ORDER.indexOf(right.mealType)
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder
+    }
+
+    return left.createdAt.localeCompare(right.createdAt)
+  })
+}
+
+function getPlannedMealStatusLabel(status: PlannedMeal['status'], language: 'en' | 'zh'): string {
+  if (status === 'confirmed') {
+    return language === 'zh' ? '已确认' : 'Confirmed'
+  }
+
+  if (status === 'skipped') {
+    return language === 'zh' ? '已跳过' : 'Skipped'
+  }
+
+  return language === 'zh' ? '待确认' : 'Suggested'
+}
+
+function getPlannedMealStatusColor(status: PlannedMeal['status']): string {
+  if (status === 'confirmed') {
+    return 'success'
+  }
+
+  if (status === 'skipped') {
+    return 'default'
+  }
+
+  return 'processing'
+}
+
+function getPlannedMealSourceLabel(source: PlannedMeal['source'], language: 'en' | 'zh'): string {
+  if (source === 'manual') {
+    return language === 'zh' ? '手动添加' : 'Manual'
+  }
+
+  return language === 'zh' ? 'AI 建议' : 'AI suggested'
+}
+
+function formatMacroValue(value: number): number {
+  return Math.round(value)
+}
+
+function formatServingCount(value: number, language: 'en' | 'zh'): string {
+  const roundedValue = Number.isInteger(value) ? value : Number(value.toFixed(1))
+  if (language === 'zh') {
+    return `${roundedValue} 份`
+  }
+
+  return `${roundedValue} serving${roundedValue === 1 ? '' : 's'}`
+}
+
 function getAdjustmentTagColor(adjustment: DailyPlanAdjustment): string {
   if (adjustment.userResponse === 'accepted') {
     return 'success'
@@ -142,15 +204,15 @@ function getPlanningActionLabel(params: {
     ? {
         continuePlan: '继续制定计划',
         continueProfile: '继续完善资料',
-        rebuildPlan: '重新制定计划',
-        reconfirmProfile: '重新确认档案',
+        rebuildPlan: '修改资料',
+        reconfirmProfile: '修改资料',
         startPlan: '开始制定计划',
       }
     : {
         continuePlan: 'Continue planning',
         continueProfile: 'Continue profile',
-        rebuildPlan: 'Rebuild plan',
-        reconfirmProfile: 'Review profile',
+        rebuildPlan: 'Edit profile',
+        reconfirmProfile: 'Edit profile',
         startPlan: 'Start planning',
       }
 
@@ -176,12 +238,14 @@ function getPlanningActionLabel(params: {
 function HomePage(): JSX.Element {
   const { language, t } = useI18n()
   const l = (zh: string, en: string): string => language === 'zh' ? zh : en
+  const todayDate = getTodayDateString()
   const [nickname, setNickname] = useState(t('home.defaultNickname'))
   const [todayLog, setTodayLog] = useState<DietLog | null>(null)
   const [planningProfile, setPlanningProfile] = useState<PlanningProfile | null>(null)
   const [activePlanningSession, setActivePlanningSession] = useState<PlanningSession | null>(null)
   const [latestPlan, setLatestPlan] = useState<PersonalDietPlan | null>(null)
   const [recentPlans, setRecentPlans] = useState<PersonalDietPlan[]>([])
+  const [todayPlannedMeals, setTodayPlannedMeals] = useState<PlannedMeal[]>([])
   const [latestAdjustment, setLatestAdjustment] = useState<DailyPlanAdjustment | null>(null)
   const [planBuilderOpen, setPlanBuilderOpen] = useState(false)
 
@@ -190,12 +254,13 @@ function HomePage(): JSX.Element {
 
     const syncPageData = async (): Promise<void> => {
       const settings = getSettings()
-      const [profile, activeSession, plan, plans, adjustment] = await Promise.all([
+      const [profile, activeSession, plan, plans, plannedMeals, adjustment] = await Promise.all([
         getCurrentPlanningProfile(),
         getLatestActivePlanningSession(),
         getLatestPersonalDietPlan(),
         getRecentPersonalDietPlans(6),
-        getLatestDailyPlanAdjustment(getTodayDateString()),
+        getPlannedMealsForDate(todayDate),
+        getLatestDailyPlanAdjustment(todayDate),
       ])
 
       if (!mounted) {
@@ -208,6 +273,7 @@ function HomePage(): JSX.Element {
       setActivePlanningSession(activeSession)
       setLatestPlan(plan)
       setRecentPlans(plans)
+      setTodayPlannedMeals(sortPlannedMeals(plannedMeals))
       setLatestAdjustment(adjustment)
     }
 
@@ -226,7 +292,7 @@ function HomePage(): JSX.Element {
       window.removeEventListener(DIET_LOG_UPDATED_EVENT, handleSync)
       window.removeEventListener(PLANNING_UPDATED_EVENT, handleSync)
     }
-  }, [t])
+  }, [t, todayDate])
 
   const nutritionSummary = summarizeDietLog(todayLog)
   const planningProgress = useMemo(
@@ -236,6 +302,22 @@ function HomePage(): JSX.Element {
   const profileSummaryItems = useMemo(
     () => summarizePlanningProfile(planningProfile ?? {}, language).slice(0, 6),
     [language, planningProfile],
+  )
+  const activeTodayPlannedMeals = useMemo(
+    () => todayPlannedMeals.filter((meal) => meal.status !== 'skipped'),
+    [todayPlannedMeals],
+  )
+  const todayPlanTotals = useMemo(
+    () => activeTodayPlannedMeals.reduce(
+      (totals, meal) => ({
+        calories: totals.calories + meal.totalCalories,
+        protein: totals.protein + meal.totalProtein,
+        carbs: totals.carbs + meal.totalCarbs,
+        fat: totals.fat + meal.totalFat,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    ),
+    [activeTodayPlannedMeals],
   )
   const planningActionLabel = getPlanningActionLabel({
     activeSession: activePlanningSession,
@@ -273,7 +355,7 @@ function HomePage(): JSX.Element {
         <Text type="secondary">{t('home.subtitle')}</Text>
       </div>
 
-      <OneTapLogger date={getTodayDateString()} mealType={getCurrentMealType()} />
+      <OneTapLogger date={todayDate} mealType={getCurrentMealType()} />
 
       <Card className="planning-hero-card" style={{ marginTop: 24 }}>
         <div className="planning-hero-content">
@@ -375,6 +457,131 @@ function HomePage(): JSX.Element {
           </div>
         </Card>
       )}
+
+      <Card className="today-plan-card" style={{ marginTop: 24 }}>
+        <div className="today-plan-header">
+          <div className="today-plan-heading">
+            <Tag color="geekblue" bordered={false} icon={<CalendarOutlined />}>
+              {l('今日计划', 'Today’s plan')}
+            </Tag>
+            <Title level={4} className="today-plan-title">
+              {l('今天的详细执行计划', 'Today’s detailed plan')}
+            </Title>
+            <Text type="secondary">
+              {todayPlannedMeals.length > 0
+                ? l(
+                  `${todayDate} · ${todayPlannedMeals.length} 个餐次已保存`,
+                  `${todayDate} · ${todayPlannedMeals.length} planned meal${todayPlannedMeals.length === 1 ? '' : 's'} saved`,
+                )
+                : l(`${todayDate} · 暂无已保存餐次`, `${todayDate} · No saved meals yet`)}
+            </Text>
+          </div>
+
+          {todayPlannedMeals.length > 0 && (
+            <div className="today-plan-totals" aria-label={l('今日计划营养汇总', 'Today plan nutrition summary')}>
+              <div className="today-plan-total">
+                <Text type="secondary">{l('热量', 'Calories')}</Text>
+                <strong>{formatMacroValue(todayPlanTotals.calories)} kcal</strong>
+              </div>
+              <div className="today-plan-total">
+                <Text type="secondary">{l('蛋白质', 'Protein')}</Text>
+                <strong>{formatMacroValue(todayPlanTotals.protein)} g</strong>
+              </div>
+              <div className="today-plan-total">
+                <Text type="secondary">{l('碳水', 'Carbs')}</Text>
+                <strong>{formatMacroValue(todayPlanTotals.carbs)} g</strong>
+              </div>
+              <div className="today-plan-total">
+                <Text type="secondary">{l('脂肪', 'Fat')}</Text>
+                <strong>{formatMacroValue(todayPlanTotals.fat)} g</strong>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {todayPlannedMeals.length > 0 ? (
+          <div className="today-plan-meals">
+            {todayPlannedMeals.map((meal) => (
+              <section
+                key={meal.id ?? `${meal.mealType}-${meal.createdAt}`}
+                className={`today-plan-meal is-${meal.status}`}
+              >
+                <div className="today-plan-meal-head">
+                  <div>
+                    <div className="today-plan-meal-tags">
+                      <Tag color={getPlannedMealStatusColor(meal.status)} bordered={false}>
+                        {getPlannedMealStatusLabel(meal.status, language)}
+                      </Tag>
+                      <Tag bordered={false}>{getPlannedMealSourceLabel(meal.source, language)}</Tag>
+                    </div>
+                    <Title level={5} className="today-plan-meal-title">
+                      {getMealTypeLabel(meal.mealType, language)}
+                    </Title>
+                  </div>
+
+                  <div className="today-plan-meal-total">
+                    <strong>{formatMacroValue(meal.totalCalories)} kcal</strong>
+                    <Text type="secondary">
+                      P {formatMacroValue(meal.totalProtein)}g · C {formatMacroValue(meal.totalCarbs)}g · F {formatMacroValue(meal.totalFat)}g
+                    </Text>
+                  </div>
+                </div>
+
+                <div className="today-plan-item-list">
+                  {meal.items.map((item, index) => (
+                    <div key={`${item.recipeId ?? item.name}-${index}`} className="today-plan-item">
+                      <div className="today-plan-item-name">
+                        {item.emoji && <span className="today-plan-item-emoji">{item.emoji}</span>}
+                        <Text>{item.name}</Text>
+                      </div>
+                      <Text type="secondary" className="today-plan-item-meta">
+                        {formatServingCount(item.servings, language)} · {formatMacroValue(item.estimatedCalories * item.servings)} kcal
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+
+                {meal.reasoning && (
+                  <Paragraph type="secondary" className="today-plan-reasoning">
+                    {meal.reasoning}
+                  </Paragraph>
+                )}
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="today-plan-empty">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={l('今天还没有保存具体餐次计划', 'No detailed meal plan has been saved for today')}
+            />
+            {latestPlan ? (
+              <div className="today-plan-fallback">
+                <Text strong>{l('当前专属计划仍可作为今天的执行参考', 'Your current personal plan is still available for today')}</Text>
+                <Paragraph type="secondary" className="today-plan-fallback-summary">
+                  {latestPlan.summary}
+                </Paragraph>
+                <div className="today-plan-fallback-guidance">
+                  {latestPlan.mealGuidance.slice(0, 3).map((item) => (
+                    <div key={item} className="today-plan-fallback-item">
+                      <span>•</span>
+                      <Text>{item}</Text>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="primary"
+                icon={<RobotOutlined />}
+                onClick={() => setPlanBuilderOpen(true)}
+              >
+                {l('制定专属计划', 'Build personal plan')}
+              </Button>
+            )}
+          </div>
+        )}
+      </Card>
 
       <Row gutter={[20, 20]} style={{ marginTop: 24 }}>
         <Col xs={24} md={8}>

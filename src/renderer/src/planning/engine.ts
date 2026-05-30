@@ -78,6 +78,12 @@ export interface PlanVersionDiff {
   summary: string
 }
 
+export interface PlanningProfileSummaryItem {
+  key: PlanningStepKey
+  label: string
+  value: string
+}
+
 type LabelSet<T extends string> = Record<T, string>
 
 const LABELS: Record<AppLanguage, {
@@ -144,7 +150,7 @@ const STEP_SKIP_DEFAULTS: Record<AppLanguage, Partial<Record<PlanningStepKey, st
   },
 }
 
-const PROFILE_CHANGE_FIELDS: Record<AppLanguage, Array<{ key: keyof PlanningProfile; label: string }>> = {
+const PROFILE_CHANGE_FIELDS: Record<AppLanguage, Array<{ key: PlanningStepKey; label: string }>> = {
   en: [
     { key: 'age', label: 'Age' },
     { key: 'gender', label: 'Gender' },
@@ -1079,7 +1085,7 @@ export function getInitialPlanningStepKey(
   ])
   const nextStep = stepsFor('en').find((step) => !confirmedKeys.has(step.key))
 
-  return nextStep?.key ?? stepsFor('en')[0]?.key ?? null
+  return nextStep?.key ?? null
 }
 
 export function buildPlanningFollowUps(
@@ -1326,6 +1332,27 @@ function formatProfileAuditValue(
     default:
       return normalizeText(String(value))
   }
+}
+
+export function getPlanningProfileSummaryItems(
+  profile: Partial<PlanningProfile>,
+  language?: AppLanguage,
+): PlanningProfileSummaryItem[] {
+  const resolvedLanguage = resolveLanguage(language)
+
+  return PROFILE_CHANGE_FIELDS[resolvedLanguage]
+    .map((field) => {
+      const value = formatProfileAuditValue(field.key, profile, resolvedLanguage)
+
+      return value
+        ? {
+            key: field.key,
+            label: field.label,
+            value,
+          }
+        : null
+    })
+    .filter((item): item is PlanningProfileSummaryItem => item !== null)
 }
 
 export function getPlanGenerationLabel(

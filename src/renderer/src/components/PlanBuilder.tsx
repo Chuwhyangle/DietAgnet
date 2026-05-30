@@ -19,7 +19,9 @@ import {
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
+  EditOutlined,
   ExclamationCircleOutlined,
+  ReloadOutlined,
   RobotOutlined,
 } from '@ant-design/icons'
 import {
@@ -36,6 +38,7 @@ import {
   type PersonalDietPlan,
   type PlanningProfile,
   type PlanningSession,
+  type PlanningStepKey,
 } from '../stores/planning'
 import {
   buildPlanningFollowUps,
@@ -47,13 +50,13 @@ import {
   getInitialPlanningStepKey,
   getNextPlanningStepKey,
   getPlanningAnswerFromProfile,
+  getPlanningProfileSummaryItems,
   getPlanningProgress,
   getPlanningStep,
   getPlanningStepSkipValue,
   getPreviousPlanningStepKey,
   mergePlanningNote,
   normalizePlanningAnswer,
-  summarizePlanningProfile,
   validatePlanningAnswer,
 } from '../planning/engine'
 import { useI18n } from '../i18n'
@@ -117,6 +120,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
   const [draftValue, setDraftValue] = useState<string | number | undefined>(undefined)
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [generatedPlan, setGeneratedPlan] = useState<PersonalDietPlan | null>(null)
+  const [editingStepKey, setEditingStepKey] = useState<PlanningStepKey | null>(null)
   const transcriptEndRef = useRef<HTMLDivElement | null>(null)
 
   const currentFollowUp = session?.pendingFollowUps?.[0] ?? null
@@ -132,9 +136,20 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     [profileSnapshot, session?.completedStepKeys],
   )
   const profileSummaryItems = useMemo(
-    () => summarizePlanningProfile(profileSnapshot, language),
+    () => getPlanningProfileSummaryItems(profileSnapshot, language),
     [language, profileSnapshot],
   )
+  const isProfileComplete = planningProgress.totalCount > 0 &&
+    planningProgress.completedCount >= planningProgress.totalCount
+  const showProfileEditPicker = isProfileComplete &&
+    !currentFollowUp &&
+    !currentStep &&
+    profileSummaryItems.length > 0
+  const isEditingCompletedProfile = isProfileComplete &&
+    Boolean(currentStep) &&
+    (editingStepKey !== null ||
+      profileSnapshot.completionStatus === 'completed' ||
+      (session?.completedStepKeys?.length ?? 0) >= planningProgress.totalCount)
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -148,6 +163,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     const loadPlanner = async (): Promise<void> => {
       setLoading(true)
       setInlineError(null)
+      setEditingStepKey(null)
 
       try {
         const currentProfile = await getCurrentPlanningProfile()
@@ -166,8 +182,10 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
           let workingSession = activeSession
 
           if (!workingSession.currentStepKey && (workingSession.pendingFollowUps?.length ?? 0) === 0) {
+            const initialStepKey = getInitialPlanningStepKey(workingProfile, completedStepKeys)
             workingSession = (await updatePlanningSession(workingSession.id, {
-              currentStepKey: getInitialPlanningStepKey(workingProfile, completedStepKeys),
+              status: initialStepKey ? workingSession.status : 'completed',
+              currentStepKey: initialStepKey,
               completedStepKeys,
               profileSnapshot: workingProfile,
             })) ?? workingSession
@@ -208,6 +226,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
         const completedStepKeys = getCompletedPlanningStepKeys(baseProfile)
         const initialStepKey = getInitialPlanningStepKey(baseProfile, completedStepKeys)
         const initializedSession = (await updatePlanningSession(newSession.id as number, {
+          status: initialStepKey ? 'active' : 'completed',
           currentStepKey: initialStepKey,
           completedStepKeys,
           profileSnapshot: baseProfile,
@@ -277,6 +296,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
 
   const handleClose = (): void => {
     setInlineError(null)
+    setEditingStepKey(null)
     onClose()
   }
 
@@ -354,8 +374,109 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
 
     applySessionState(finalizedSession, completedProfile)
     setGeneratedPlan(savedPlan)
+    setEditingStepKey(null)
     message.success(l('专属饮食计划已生成并保存到本地。', 'Your personal diet plan was generated and saved locally.'))
     onCompleted?.(savedPlan)
+  }
+
+  const handleStartProfileEdit = async (stepKey: PlanningStepKey): Promise<void> => {
+    if (!session?.id) {
+      return
+    }
+
+    setSubmitting(true)
+    setInlineError(null)
+
+    try {
+      const step = getPlanningStep(stepKey, language)
+      const completedStepKeys = Array.from(
+        new Set([
+          ...getCompletedPlanningStepKeys(profileSnapshot),
+          ...(session.completedStepKeys ?? []),
+        ]),
+      )
+
+      let workingSession = (await updatePlanningSession(session.id, {
+        status: 'active',
+        currentStepKey: stepKey,
+        completedStepKeys,
+        pendingFollowUps: [],
+        profileSnapshot,
+      })) ?? session
+
+      workingSession = (await appendPlanningMessages(session.id, [
+        createPlanningMessage(
+          'system',
+          l(`进入修改模式：${step.label}`, `Editing profile item: ${step.label}`),
+          'status',
+        ),
+        createPlanningMessage('assistant', buildPlanningPrompt(stepKey, profileSnapshot, language)),
+      ])) ?? workingSession
+
+      setGeneratedPlan(null)
+      setEditingStepKey(stepKey)
+      applySessionState(workingSession, profileSnapshot)
+    } catch (error) {
+      console.error('Failed to start profile edit:', error)
+      const errorMessage = error instanceof Error ? error.message : l('打开修改项失败', 'Failed to open this profile item')
+      setInlineError(errorMessage)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleCancelProfileEdit = async (): Promise<void> => {
+    if (!session?.id) {
+      return
+    }
+
+    setSubmitting(true)
+    setInlineError(null)
+
+    try {
+      let workingSession = (await updatePlanningSession(session.id, {
+        status: isProfileComplete ? 'completed' : 'active',
+        currentStepKey: null,
+        pendingFollowUps: [],
+        profileSnapshot,
+      })) ?? session
+
+      workingSession = (await appendPlanningMessages(session.id, [
+        createPlanningMessage(
+          'system',
+          l('已返回资料修改列表。', 'Returned to the profile edit list.'),
+          'status',
+        ),
+      ])) ?? workingSession
+
+      setEditingStepKey(null)
+      applySessionState(workingSession, profileSnapshot)
+    } catch (error) {
+      console.error('Failed to cancel profile edit:', error)
+      const errorMessage = error instanceof Error ? error.message : l('返回资料列表失败', 'Failed to return to the profile list')
+      setInlineError(errorMessage)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleRegenerateCurrentProfile = async (): Promise<void> => {
+    if (!session?.id || !isProfileComplete) {
+      return
+    }
+
+    setSubmitting(true)
+    setInlineError(null)
+
+    try {
+      await finalizePlan(session, profileSnapshot)
+    } catch (error) {
+      console.error('Failed to regenerate planning plan:', error)
+      const errorMessage = error instanceof Error ? error.message : l('重新生成计划失败', 'Failed to regenerate the plan')
+      setInlineError(errorMessage)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleSubmitCurrentStep = async (forcedRawValue?: string | number): Promise<void> => {
@@ -367,6 +488,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     setInlineError(null)
 
     try {
+      const shouldFinalizeAfterEdit = isEditingCompletedProfile
       const rawValue = forcedRawValue ?? (
         currentStep.optional && !String(draftValue ?? '').trim()
           ? getPlanningStepSkipValue(currentStep.key, language) ?? ''
@@ -414,7 +536,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
         ...(workingSession.resolvedFollowUpCodes ?? []),
       ]
       const newFollowUps = buildPlanningFollowUps(savedProfile, existingFollowUpCodes, language)
-      const nextStepKey = getNextPlanningStepKey(currentStep.key)
+      const nextStepKey = shouldFinalizeAfterEdit ? null : getNextPlanningStepKey(currentStep.key)
 
       workingSession = (await updatePlanningSession(session.id, {
         profileSnapshot: savedProfile,
@@ -437,6 +559,11 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
           'warning',
         )) ?? workingSession
         applySessionState(workingSession, savedProfile)
+        return
+      }
+
+      if (shouldFinalizeAfterEdit) {
+        await finalizePlan(workingSession, savedProfile)
         return
       }
 
@@ -474,6 +601,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     setInlineError(null)
 
     try {
+      const shouldFinalizeAfterEdit = editingStepKey !== null || (isProfileComplete && !session.currentStepKey)
       const answerText = skip ? l('暂未补充', 'No details added yet') : normalizedAnswer
       const nextProfileSnapshot = { ...profileSnapshot }
 
@@ -527,6 +655,11 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
           'warning',
         )) ?? workingSession
         applySessionState(workingSession, savedProfile)
+        return
+      }
+
+      if (shouldFinalizeAfterEdit) {
+        await finalizePlan(workingSession, savedProfile)
         return
       }
 
@@ -657,6 +790,47 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
     )
   }
 
+  const renderProfileEditPicker = (): JSX.Element => {
+    return (
+      <div className="plan-builder-edit-picker">
+        <Paragraph type="secondary" className="plan-builder-question">
+          {l(
+            '资料已经收齐。选择任意一项修改，保存后会重新生成一版可审计的饮食计划；也可以直接用当前资料重新生成。',
+            'Your profile is complete. Edit any item, then a new auditable plan version will be generated; or regenerate directly from the current profile.',
+          )}
+        </Paragraph>
+
+        <div className="plan-builder-edit-grid">
+          {profileSummaryItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className="plan-builder-edit-option"
+              onClick={() => void handleStartProfileEdit(item.key)}
+              disabled={submitting}
+            >
+              <EditOutlined className="plan-builder-edit-option-icon" />
+              <span className="plan-builder-edit-option-main">
+                <span className="plan-builder-edit-option-label">{item.label}</span>
+                <span className="plan-builder-edit-option-value">{item.value}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="plan-builder-actions">
+          <Button
+            icon={<ReloadOutlined />}
+            loading={submitting}
+            onClick={() => void handleRegenerateCurrentProfile()}
+          >
+            {l('直接重新生成计划', 'Regenerate plan')}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Drawer
       open={open}
@@ -740,9 +914,9 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                 {profileSummaryItems.length > 0 ? (
                   <div className="plan-builder-summary-list">
                     {profileSummaryItems.map((item) => (
-                      <div key={item.label} className="plan-builder-summary-item">
+                      <div key={item.key} className="plan-builder-summary-item">
                         <Text type="secondary">{item.label}</Text>
-                        <Text strong>{item.value}</Text>
+                        <Text strong className="plan-builder-summary-value">{item.value}</Text>
                       </div>
                     ))}
                   </div>
@@ -871,16 +1045,22 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
             </Card>
           )}
 
-          {session?.status !== 'completed' && (
+          {(currentFollowUp || currentStep || showProfileEditPicker || session?.status !== 'completed') && (
             <Card
               className="plan-builder-input-card"
-              title={currentFollowUp
-                ? l('异常确认', 'Follow-up Check')
-                : currentStep
-                  ? l(`当前问题：${currentStep.label}`, `Current question: ${currentStep.label}`)
-                  : l('等待处理', 'Waiting')}
+              title={showProfileEditPicker
+                ? l('选择要修改的资料', 'Choose a profile item to edit')
+                : currentFollowUp
+                  ? l('异常确认', 'Follow-up Check')
+                  : currentStep
+                    ? isEditingCompletedProfile
+                      ? l(`修改资料：${currentStep.label}`, `Edit profile item: ${currentStep.label}`)
+                      : l(`当前问题：${currentStep.label}`, `Current question: ${currentStep.label}`)
+                    : l('等待处理', 'Waiting')}
             >
-              {currentFollowUp ? (
+              {showProfileEditPicker ? (
+                renderProfileEditPicker()
+              ) : currentFollowUp ? (
                 <Paragraph type="secondary" className="plan-builder-question">
                   {currentFollowUp.prompt}
                 </Paragraph>
@@ -901,7 +1081,7 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                 </Paragraph>
               )}
 
-              {renderInputControl()}
+              {!showProfileEditPicker && renderInputControl()}
 
               {inlineError && (
                 <Alert
@@ -912,34 +1092,46 @@ function PlanBuilder({ open, onClose, onCompleted }: PlanBuilderProps): JSX.Elem
                 />
               )}
 
-              <div className="plan-builder-actions">
-                {!currentFollowUp && currentStep && getPreviousPlanningStepKey(currentStep.key) && (
-                  <Button onClick={() => void handleBack()} disabled={submitting}>
-                    {l('返回上一题', 'Back')}
-                  </Button>
-                )}
+              {(currentFollowUp || currentStep) && (
+                <div className="plan-builder-actions">
+                  {!currentFollowUp && currentStep && isEditingCompletedProfile && (
+                    <Button onClick={() => void handleCancelProfileEdit()} disabled={submitting}>
+                      {l('返回资料列表', 'Back to profile list')}
+                    </Button>
+                  )}
 
-                {(currentFollowUp || currentStep?.optional) && (
+                  {!currentFollowUp && currentStep && !isEditingCompletedProfile && getPreviousPlanningStepKey(currentStep.key) && (
+                    <Button onClick={() => void handleBack()} disabled={submitting}>
+                      {l('返回上一题', 'Back')}
+                    </Button>
+                  )}
+
+                  {(currentFollowUp || currentStep?.optional) && (
+                    <Button
+                      onClick={() => void (
+                        currentFollowUp
+                          ? handleSubmitFollowUp(true)
+                          : handleSubmitCurrentStep(getPlanningStepSkipValue(currentStep?.key ?? 'dietPreference', language) ?? '')
+                      )}
+                      disabled={submitting}
+                    >
+                      {l('暂时跳过', 'Skip for now')}
+                    </Button>
+                  )}
+
                   <Button
-                    onClick={() => void (
-                      currentFollowUp
-                        ? handleSubmitFollowUp(true)
-                        : handleSubmitCurrentStep(getPlanningStepSkipValue(currentStep?.key ?? 'dietPreference', language) ?? '')
-                    )}
-                    disabled={submitting}
+                    type="primary"
+                    loading={submitting}
+                    onClick={() => void (currentFollowUp ? handleSubmitFollowUp(false) : handleSubmitCurrentStep())}
                   >
-                    {l('暂时跳过', 'Skip for now')}
+                    {currentFollowUp
+                      ? l('保存异常说明', 'Save follow-up details')
+                      : isEditingCompletedProfile
+                        ? l('保存并重新生成', 'Save and regenerate')
+                        : l('保存并继续', 'Save and continue')}
                   </Button>
-                )}
-
-                <Button
-                  type="primary"
-                  loading={submitting}
-                  onClick={() => void (currentFollowUp ? handleSubmitFollowUp(false) : handleSubmitCurrentStep())}
-                >
-                  {currentFollowUp ? l('保存异常说明', 'Save follow-up details') : l('保存并继续', 'Save and continue')}
-                </Button>
-              </div>
+                </div>
+              )}
             </Card>
           )}
         </div>

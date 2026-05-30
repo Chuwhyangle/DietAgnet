@@ -60,6 +60,7 @@ vi.mock('../../planning/engine', () => ({
   getInitialPlanningStepKey: vi.fn().mockReturnValue('height'),
   getNextPlanningStepKey: vi.fn().mockReturnValue(null),
   getPlanningAnswerFromProfile: vi.fn().mockReturnValue(undefined),
+  getPlanningProfileSummaryItems: vi.fn().mockReturnValue([]),
   getPlanningProgress: vi.fn().mockReturnValue({ percent: 0, completedCount: 0, totalCount: 10 }),
   getPlanningStep: vi.fn().mockReturnValue({
     key: 'height',

@@ -29,6 +29,7 @@ import {
   getNextPlanningStepKey,
   getPlanGenerationLabel,
   getPlanningProgress,
+  getPlanningProfileSummaryItems,
   getPlanningStep,
   getPlanningStepSkipValue,
   getPlanningSteps,
@@ -144,6 +145,26 @@ describe('planning/engine helpers', () => {
       ).toBe('heightCm')
     })
 
+    it('returns null when every profile step is complete', () => {
+      expect(
+        getInitialPlanningStepKey({
+          age: 30,
+          gender: 'male',
+          heightCm: 175,
+          weightKg: 70,
+          targetWeightKg: 65,
+          goal: 'lose_fat',
+          activityLevel: 'medium',
+          mealsPerDay: 3,
+          dietPreference: 'simple meals',
+          allergies: 'none',
+          medicalNotes: 'none',
+          cookingPreference: 'cook at home',
+          scheduleNotes: 'regular office hours',
+        }),
+      ).toBeNull()
+    })
+
     it('lists completed step keys in order', () => {
       expect(
         getCompletedPlanningStepKeys({ age: 30, gender: 'male', weightKg: 70 }),
@@ -208,6 +229,18 @@ describe('planning/engine helpers', () => {
       const partial = summarizePlanningProfile({ age: 30 })
       expect(partial).toContainEqual({ label: 'Age', value: '30 years' })
       expect(summarizePlanningProfile({ age: 30 }, 'zh')).toContainEqual({ label: '年龄', value: '30 岁' })
+    })
+
+    it('provides keyed profile summary items for direct editing', () => {
+      const items = getPlanningProfileSummaryItems({
+        age: 30,
+        gender: 'male',
+        dietPreference: 'simple meals',
+      })
+
+      expect(items).toContainEqual({ key: 'age', label: 'Age', value: '30 years' })
+      expect(items).toContainEqual({ key: 'gender', label: 'Gender', value: 'Male' })
+      expect(items).toContainEqual({ key: 'dietPreference', label: 'Diet preference', value: 'simple meals' })
     })
   })
 

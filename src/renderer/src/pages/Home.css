@@ -159,6 +159,191 @@
   flex-shrink: 0;
 }
 
+.today-plan-card {
+  background:
+    radial-gradient(circle at top right, rgba(167, 205, 255, 0.24), transparent 30%),
+    linear-gradient(135deg, rgba(255, 252, 245, 0.96), rgba(246, 250, 255, 0.94)) !important;
+  border: 1px solid rgba(104, 148, 202, 0.18) !important;
+}
+
+.today-plan-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.today-plan-heading {
+  min-width: 0;
+}
+
+.today-plan-title {
+  margin-top: 10px !important;
+  margin-bottom: 6px !important;
+}
+
+.today-plan-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  gap: 10px;
+  min-width: min(100%, 420px);
+}
+
+.today-plan-total {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 252, 245, 0.88);
+  border: 1px solid rgba(104, 148, 202, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.today-plan-total strong {
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.today-plan-meals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.today-plan-meal {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 252, 245, 0.9);
+  border: 1px solid rgba(104, 148, 202, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.today-plan-meal.is-skipped {
+  opacity: 0.74;
+}
+
+.today-plan-meal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.today-plan-meal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.today-plan-meal-title {
+  margin: 0 !important;
+}
+
+.today-plan-meal-total {
+  flex-shrink: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.today-plan-meal-total strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.today-plan-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-plan-item {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px dashed rgba(125, 107, 93, 0.14);
+}
+
+.today-plan-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.today-plan-item-name {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+}
+
+.today-plan-item-emoji {
+  flex-shrink: 0;
+}
+
+.today-plan-item-meta {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.today-plan-reasoning {
+  margin-bottom: 0 !important;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(232, 242, 255, 0.72);
+  overflow-wrap: anywhere;
+}
+
+.today-plan-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.today-plan-fallback {
+  width: 100%;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 252, 245, 0.82);
+  border: 1px dashed rgba(104, 148, 202, 0.2);
+  text-align: left;
+}
+
+.today-plan-fallback-summary {
+  margin-top: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+.today-plan-fallback-guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-plan-fallback-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+
+.today-plan-fallback-item span {
+  color: #5e8cc5;
+  font-weight: 700;
+}
+
 .stat-card {
   border-radius: var(--radius-md) !important;
   transition: all 0.3s ease !important;
@@ -301,6 +486,15 @@
     min-width: 0;
   }
 
+  .today-plan-header {
+    flex-direction: column;
+  }
+
+  .today-plan-totals {
+    min-width: 0;
+    width: 100%;
+  }
+
   .latest-plan-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -331,6 +525,21 @@
 
   .dynamic-plan-actions .ant-btn {
     width: 100%;
+  }
+
+  .today-plan-totals,
+  .today-plan-meals {
+    grid-template-columns: 1fr;
+  }
+
+  .today-plan-meal-head,
+  .today-plan-item {
+    flex-direction: column;
+  }
+
+  .today-plan-meal-total,
+  .today-plan-item-meta {
+    text-align: left;
   }
 
   .latest-plan-head {

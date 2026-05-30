@@ -73,6 +73,12 @@
   border-bottom: none;
 }
 
+.plan-builder-summary-value {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .plan-builder-transcript-card,
 .plan-builder-input-card,
 .plan-builder-result-card {
@@ -200,6 +206,69 @@
   text-align: left;
 }
 
+.plan-builder-edit-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.plan-builder-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plan-builder-edit-option {
+  width: 100%;
+  min-height: 68px;
+  border: 1px solid rgba(255, 182, 193, 0.32);
+  border-radius: 14px;
+  background: rgba(255, 252, 245, 0.96);
+  padding: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.plan-builder-edit-option:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(255, 143, 163, 0.66);
+  box-shadow: 0 12px 24px rgba(255, 143, 163, 0.14);
+}
+
+.plan-builder-edit-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.plan-builder-edit-option-icon {
+  margin-top: 3px;
+  color: #ff7f96;
+  flex-shrink: 0;
+}
+
+.plan-builder-edit-option-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-builder-edit-option-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.plan-builder-edit-option-value {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
 .plan-builder-actions {
   margin-top: 16px;
   display: flex;
@@ -247,6 +316,10 @@
   }
 
   .plan-builder-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-builder-edit-grid {
     grid-template-columns: 1fr;
   }
 

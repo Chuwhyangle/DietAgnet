@@ -30,6 +30,7 @@ vi.mock('../../stores/planning', () => ({
   getCurrentPlanningProfile: vi.fn().mockResolvedValue(null),
   getLatestActivePlanningSession: vi.fn().mockResolvedValue(null),
   getLatestPersonalDietPlan: vi.fn().mockResolvedValue(null),
+  getPlannedMealsForDate: vi.fn().mockResolvedValue([]),
   getRecentPersonalDietPlans: vi.fn().mockResolvedValue([]),
   getRecentProactiveEvents: vi.fn().mockResolvedValue([]),
   getLatestDailyPlanAdjustment: vi.fn().mockResolvedValue(null),
@@ -98,6 +99,7 @@ beforeEach(() => {
   }
 })
 
+const planningStore = await import('../../stores/planning')
 const { default: HomePage } = await import('../Home')
 
 describe('HomePage', () => {
@@ -140,5 +142,46 @@ describe('HomePage', () => {
     await user.click(planButton)
     // PlanBuilder mock should appear
     expect(screen.getByTestId('plan-builder-mock')).toBeInTheDocument()
+  })
+
+  it('displays saved meals in today detailed plan', async () => {
+    vi.mocked(planningStore.getPlannedMealsForDate).mockResolvedValueOnce([
+      {
+        id: 42,
+        date: '2024-06-15',
+        mealType: 'lunch',
+        items: [
+          {
+            name: 'Chicken rice bowl',
+            emoji: '🍚',
+            servings: 1,
+            estimatedCalories: 620,
+            estimatedProtein: 36,
+            estimatedCarbs: 72,
+            estimatedFat: 18,
+          },
+        ],
+        totalCalories: 620,
+        totalProtein: 36,
+        totalCarbs: 72,
+        totalFat: 18,
+        source: 'ai_suggested',
+        status: 'confirmed',
+        reasoning: 'Balanced lunch for training day.',
+        createdAt: '2024-06-15T10:00:00.000Z',
+        updatedAt: '2024-06-15T10:00:00.000Z',
+      },
+    ])
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Today’s detailed plan')).toBeInTheDocument()
+    expect(await screen.findByText('Chicken rice bowl')).toBeInTheDocument()
+    expect(screen.getByText('Balanced lunch for training day.')).toBeInTheDocument()
+    expect(screen.getAllByText('620 kcal').length).toBeGreaterThan(0)
   })
 })
